@@ -1,0 +1,184 @@
+<?php
+
+namespace App\Http\Controllers\Web;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\CertificateRequest;
+use App\Http\Services\CertificateService;
+use App\Models\Certificate;
+
+class CertificateController extends Controller
+{
+    protected $certificateService;
+
+    public function __construct(CertificateService $certificateService)
+    {
+        $this->certificateService = $certificateService;
+    }
+
+    /**
+     * Display certificate templates.
+     */
+    public function index()
+    {
+        // Show template selection page
+        return view('certificates.index');
+    }
+
+    /**
+     * Show the form for creating a new resource (template selection).
+     */
+    public function create()
+    {
+        return view('certificates.create');
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(CertificateRequest $request)
+    {
+        $data = $request->validated();
+        
+        // Handle logo upload
+        if ($request->hasFile('logo')) {
+            $data['logo_path'] = $this->certificateService->handleLogoUpload($request->file('logo'));
+        }
+
+        // Generate certificate number if not provided
+        if (empty($data['certificate_number'])) {
+            $data['certificate_number'] = $this->certificateService->generateCertificateNumber();
+        }
+
+        Certificate::create($data);
+
+        return redirect()->route('certificates.index')
+            ->with('success', 'Certificate created successfully.');
+    }
+
+    /**
+     * Display the certificate editor (no database, just template).
+     */
+    public function show($id = null)
+    {
+        $template = request()->query('template', 'default');
+        
+        // If it's a new certificate (from template selection)
+        if ($id === 'new' || request()->has('template')) {
+            $certificate = (object) [
+                'id' => 'new',
+                'student_name' => 'Student Name',
+                'manager_name' => 'Manager Name',
+                'teacher_name' => 'Teacher Name',
+                'certificate_number' => $this->certificateService->generateCertificateNumber(),
+                'issue_date' => now(),
+                'logo_path' => null,
+            ];
+            
+            // Return appropriate template view
+            if ($template === 'islamic') {
+                return view('certificates.show-islamic', compact('certificate'));
+            }
+            
+            if ($template === 'modern') {
+                return view('certificates.show-modern', compact('certificate'));
+            }
+            
+            return view('certificates.show', compact('certificate'));
+        }
+
+        // For existing certificates (if any exist)
+        $certificate = Certificate::findOrFail($id);
+        return view('certificates.show', compact('certificate'));
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit(Certificate $certificate)
+    {
+        return view('certificates.edit', compact('certificate'));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(CertificateRequest $request, Certificate $certificate)
+    {
+        $data = $request->validated();
+
+        // Handle logo upload
+        if ($request->hasFile('logo')) {
+            // Delete old logo
+            $this->certificateService->deleteLogo($certificate->logo_path);
+            // Upload new logo
+            $data['logo_path'] = $this->certificateService->handleLogoUpload($request->file('logo'));
+        } else {
+            // Keep existing logo if not updating
+            unset($data['logo_path']);
+        }
+
+        $certificate->update($data);
+        $certificate->refresh();
+
+        // Return JSON response for AJAX requests
+        if ($request->expectsJson() || $request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Certificate updated successfully.',
+                'logo_url' => $certificate->logo_path ? asset('storage/' . $certificate->logo_path) : null,
+            ]);
+        }
+
+        return redirect()->route('certificates.index')
+            ->with('success', 'Certificate updated successfully.');
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(Certificate $certificate)
+    {
+        // Delete logo file
+        $this->certificateService->deleteLogo($certificate->logo_path);
+        
+        $certificate->delete();
+
+        return redirect()->route('certificates.index')
+            ->with('success', 'Certificate deleted successfully.');
+    }
+
+    /**
+     * Download certificate as PDF (from form data, no database)
+     */
+    public function download($id = null)
+    {
+        // Get template from request (query string for GET, POST data for POST)
+        // For Flutter WebView compatibility, prioritize query string
+        $template = request()->query('template') ?? request()->post('template', 'default');
+        
+        // Get certificate data from request (for new certificates) or database
+        if ($id === 'new' || request()->has('student_name')) {
+            $certificate = (object) [
+                'student_name' => request('student_name', 'Student Name'),
+                'manager_name' => request('manager_name', 'Manager Name'),
+                'teacher_name' => request('teacher_name', 'Teacher Name'),
+                'certificate_number' => request('certificate_number') ?: $this->certificateService->generateCertificateNumber(),
+                'issue_date' => request('issue_date') ? \Carbon\Carbon::parse(request('issue_date')) : now(),
+                'logo_path' => null, // Fixed logo.png
+            ];
+        } else {
+            // Try to find in database if it's a numeric ID
+            if (is_numeric($id)) {
+                $certificate = Certificate::find($id);
+                if (!$certificate) {
+                    abort(404);
+                }
+            } else {
+                abort(404);
+            }
+        }
+
+        return $this->certificateService->generatePdf($certificate, $template);
+    }
+}
