@@ -14,7 +14,22 @@ class AdminUserSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create admin user if it doesn't exist
+        // Create real admin user with secure credentials
+        $adminEmail = 'admin@almajdacademy.com';
+        $adminPassword = 'Almajd@2024!';
+        
+        User::firstOrCreate(
+            ['email' => $adminEmail],
+            [
+                'name' => 'System Administrator',
+                'email' => $adminEmail,
+                'password' => Hash::make($adminPassword),
+                'user_type' => UserType::Admin,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        // Also create the old mock admin for backward compatibility
         User::firstOrCreate(
             ['email' => 'admin@almajd.com'],
             [
@@ -26,8 +41,16 @@ class AdminUserSeeder extends Seeder
             ]
         );
 
-        $this->command->info('Admin user created successfully!');
+        $this->command->info('========================================');
+        $this->command->info('Admin users created successfully!');
+        $this->command->info('========================================');
+        $this->command->info('REAL ADMIN CREDENTIALS:');
+        $this->command->info('Email: ' . $adminEmail);
+        $this->command->info('Password: ' . $adminPassword);
+        $this->command->info('========================================');
+        $this->command->info('MOCK ADMIN (for development):');
         $this->command->info('Email: admin@almajd.com');
         $this->command->info('Password: admin123');
+        $this->command->info('========================================');
     }
 }
