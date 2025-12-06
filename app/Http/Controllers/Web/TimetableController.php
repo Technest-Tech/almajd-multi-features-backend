@@ -597,7 +597,7 @@ class TimetableController extends Controller
             ]);
 
             // Get default phone number from config
-            $phone = config('services.whatsapp.default_phone', '201557601371');
+            $phone = config('services.whatsapp.default_phone', '201554134201');
             
             // Clean phone number - remove any non-digit characters
             $phone = preg_replace('/\D/', '', $phone);

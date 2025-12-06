@@ -36,7 +36,7 @@ return [
     ],
 
     'whatsapp' => [
-        'default_phone' => env('WHATSAPP_DEFAULT_PHONE', '201557601371'),
+        'default_phone' => env('WHATSAPP_DEFAULT_PHONE', '201554134201'),
     ],
 
 ];

@@ -501,7 +501,15 @@
             <div class="certificate-footer">
                 <div class="certificate-date-section">
                     <div class="certificate-date-label">{{ request('date_label', 'Date') }}</div>
-                    <div class="certificate-date">{{ $certificate->issue_date->format('F d, Y') }}</div>
+                    <div class="certificate-date">
+                        @if($certificate->issue_date instanceof \Carbon\Carbon)
+                            {{ $certificate->issue_date->format('F d, Y') }}
+                        @elseif(is_string($certificate->issue_date))
+                            {{ \Carbon\Carbon::parse($certificate->issue_date)->format('F d, Y') }}
+                        @else
+                            {{ now()->format('F d, Y') }}
+                        @endif
+                    </div>
                 </div>
                 <div class="website-section">
                     <img src="{{ public_path('ketm5.png') }}" alt="Almajd Academy" class="website-logo">

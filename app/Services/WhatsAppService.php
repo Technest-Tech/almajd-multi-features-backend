@@ -13,7 +13,7 @@ class WhatsAppService
     /**
      * Send a WhatsApp message
      *
-     * @param string $to Phone number in format: 201557601371@c.us
+     * @param string $to Phone number in format: 201554134201@c.us
      * @param string $message Message content
      * @return array ['success' => bool, 'message' => string]
      */

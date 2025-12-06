@@ -153,32 +153,52 @@ class CertificateController extends Controller
      */
     public function download($id = null)
     {
-        // Get template from request (query string for GET, POST data for POST)
-        // For Flutter WebView compatibility, prioritize query string
-        $template = request()->query('template') ?? request()->post('template', 'default');
-        
-        // Get certificate data from request (for new certificates) or database
-        if ($id === 'new' || request()->has('student_name')) {
-            $certificate = (object) [
-                'student_name' => request('student_name', 'Student Name'),
-                'manager_name' => request('manager_name', 'Manager Name'),
-                'teacher_name' => request('teacher_name', 'Teacher Name'),
-                'certificate_number' => request('certificate_number') ?: $this->certificateService->generateCertificateNumber(),
-                'issue_date' => request('issue_date') ? \Carbon\Carbon::parse(request('issue_date')) : now(),
-                'logo_path' => null, // Fixed logo.png
-            ];
-        } else {
-            // Try to find in database if it's a numeric ID
-            if (is_numeric($id)) {
-                $certificate = Certificate::find($id);
-                if (!$certificate) {
+        try {
+            // Get template from request (query string for GET, POST data for POST)
+            // For Flutter WebView compatibility, prioritize query string
+            $template = request()->query('template') ?? request()->post('template', 'default');
+            
+            // Get certificate data from request (for new certificates) or database
+            if ($id === 'new' || request()->has('student_name')) {
+                // Parse issue_date safely
+                $issueDate = now();
+                if (request('issue_date')) {
+                    try {
+                        $issueDate = \Carbon\Carbon::parse(request('issue_date'));
+                    } catch (\Exception $e) {
+                        // If parsing fails, use current date
+                        $issueDate = now();
+                    }
+                }
+                
+                $certificate = (object) [
+                    'student_name' => request('student_name', 'Student Name'),
+                    'manager_name' => request('manager_name', 'Manager Name'),
+                    'teacher_name' => request('teacher_name', 'Teacher Name'),
+                    'certificate_number' => request('certificate_number') ?: $this->certificateService->generateCertificateNumber(),
+                    'issue_date' => $issueDate,
+                    'logo_path' => null, // Fixed logo.png
+                ];
+            } else {
+                // Try to find in database if it's a numeric ID
+                if (is_numeric($id)) {
+                    $certificate = Certificate::find($id);
+                    if (!$certificate) {
+                        abort(404);
+                    }
+                } else {
                     abort(404);
                 }
-            } else {
-                abort(404);
             }
-        }
 
-        return $this->certificateService->generatePdf($certificate, $template);
+            return $this->certificateService->generatePdf($certificate, $template);
+        } catch (\Exception $e) {
+            \Log::error('Certificate download error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request' => request()->all(),
+            ]);
+            
+            abort(500, 'Failed to generate certificate: ' . $e->getMessage());
+        }
     }
 }
