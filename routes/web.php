@@ -13,6 +13,7 @@ Route::get('certificates', [CertificateController::class, 'index'])->name('certi
 Route::get('certificates/create', [CertificateController::class, 'create'])->name('certificates.create');
 Route::get('certificates/{id}', [CertificateController::class, 'show'])->name('certificates.show');
 Route::match(['get', 'post'], 'certificates/{id}/download', [CertificateController::class, 'download'])->name('certificates.download');
+Route::get('certificates/health-check', [CertificateController::class, 'healthCheck'])->name('certificates.health-check');
 
 // Timetable calendar routes (public, accessible from Flutter WebView)
 // IMPORTANT: More specific routes must come before parameterized routes

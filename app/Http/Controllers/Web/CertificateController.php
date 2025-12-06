@@ -149,6 +149,50 @@ class CertificateController extends Controller
     }
 
     /**
+     * Health check for PDF generation system
+     */
+    public function healthCheck()
+    {
+        $checks = [
+            'browsershot_available' => false,
+            'node_available' => false,
+            'images_exist' => false,
+            'errors' => [],
+        ];
+
+        // Check if Browsershot is available
+        try {
+            $checks['browsershot_available'] = class_exists(\Spatie\Browsershot\Browsershot::class);
+        } catch (\Exception $e) {
+            $checks['errors'][] = 'Browsershot class not found: ' . $e->getMessage();
+        }
+
+        // Check Node.js
+        try {
+            $nodeVersion = shell_exec('node --version 2>&1');
+            $checks['node_available'] = !empty($nodeVersion) && strpos($nodeVersion, 'v') === 0;
+            if (!$checks['node_available']) {
+                $checks['errors'][] = 'Node.js not found or not in PATH';
+            }
+        } catch (\Exception $e) {
+            $checks['errors'][] = 'Error checking Node.js: ' . $e->getMessage();
+        }
+
+        // Check if images exist
+        $logoPath = public_path('logo.png');
+        $ketmPath = public_path('ketm5.png');
+        $checks['images_exist'] = file_exists($logoPath) && file_exists($ketmPath);
+        if (!file_exists($logoPath)) {
+            $checks['errors'][] = 'logo.png not found at: ' . $logoPath;
+        }
+        if (!file_exists($ketmPath)) {
+            $checks['errors'][] = 'ketm5.png not found at: ' . $ketmPath;
+        }
+
+        return response()->json($checks, $checks['browsershot_available'] && $checks['node_available'] && $checks['images_exist'] ? 200 : 503);
+    }
+
+    /**
      * Download certificate as PDF (from form data, no database)
      */
     public function download($id = null)
@@ -192,13 +236,36 @@ class CertificateController extends Controller
             }
 
             return $this->certificateService->generatePdf($certificate, $template);
-        } catch (\Exception $e) {
-            \Log::error('Certificate download error: ' . $e->getMessage(), [
+        } catch (\Spatie\Browsershot\Exceptions\CouldNotTakeBrowsershot $e) {
+            \Log::error('Browsershot error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
                 'request' => request()->all(),
             ]);
             
-            abort(500, 'Failed to generate certificate: ' . $e->getMessage());
+            // Return a more helpful error message
+            return response()->json([
+                'error' => true,
+                'message' => 'PDF generation failed. Please ensure Browsershot and Puppeteer are properly installed on the server.',
+                'details' => config('app.debug') ? $e->getMessage() : 'Contact administrator for assistance.'
+            ], 500);
+        } catch (\Exception $e) {
+            \Log::error('Certificate download error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request' => request()->all(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            
+            // Return JSON error for API requests, or abort for browser requests
+            if (request()->expectsJson() || request()->ajax() || request()->wantsJson()) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Failed to generate certificate PDF.',
+                    'details' => config('app.debug') ? $e->getMessage() : 'An error occurred while generating the certificate.'
+                ], 500);
+            }
+            
+            abort(500, 'Failed to generate certificate: ' . (config('app.debug') ? $e->getMessage() : 'Please contact administrator.'));
         }
     }
 }

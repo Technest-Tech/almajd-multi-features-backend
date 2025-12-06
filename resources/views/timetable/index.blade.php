@@ -32,6 +32,57 @@
             padding: 10px;
         }
 
+        .topbar {
+            background: white;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .topbar-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .topbar-title i {
+            color: #667eea;
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        @media screen and (max-width: 768px) {
+            .topbar {
+                padding: 12px 15px;
+                margin-bottom: 15px;
+            }
+
+            .topbar-title {
+                font-size: 18px;
+            }
+
+            .topbar-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+
         .main-wrapper {
             display: flex;
             gap: 20px;
@@ -196,12 +247,7 @@
         }
 
         .calendar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            gap: 15px;
+            display: none; /* Hidden since we have topbar now */
         }
 
         .calendar-title {
@@ -1345,10 +1391,12 @@
                 top: auto;
                 transform: translateY(100%);
                 transition: transform 0.3s ease-in-out;
+                pointer-events: none; /* Prevent touch events when closed */
             }
 
             .sidebar.show {
                 transform: translateY(0);
+                pointer-events: auto; /* Enable touch events when open */
             }
 
             .sidebar-title {
@@ -1630,6 +1678,20 @@
     </style>
 </head>
 <body>
+    <!-- Topbar -->
+    <div class="topbar">
+        <div class="topbar-title">
+            <i class="fas fa-calendar-alt"></i>
+            <span>Timetable Calendar</span>
+        </div>
+        <div class="topbar-actions">
+            <button type="button" class="btn btn-primary" onclick="refreshCalendar()" title="Refresh Calendar">
+                <i class="fas fa-sync-alt"></i>
+                <span class="d-none d-md-inline">Refresh</span>
+            </button>
+        </div>
+    </div>
+
     <!-- Backdrop overlay -->
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
@@ -2166,6 +2228,24 @@
     <script>
         let calendar;
         const isMobile = window.innerWidth <= 768;
+
+        // Refresh Calendar Function
+        function refreshCalendar() {
+            if (calendar) {
+                calendar.refetchEvents();
+                // Add visual feedback
+                const refreshBtn = document.querySelector('.topbar-actions button[onclick="refreshCalendar()"]');
+                if (refreshBtn) {
+                    const icon = refreshBtn.querySelector('i');
+                    if (icon) {
+                        icon.classList.add('fa-spin');
+                        setTimeout(() => {
+                            icon.classList.remove('fa-spin');
+                        }, 1000);
+                    }
+                }
+            }
+        }
 
         // Toggle Filters Function
         function toggleFilters() {
@@ -2951,45 +3031,17 @@
         // Close on backdrop click
         sidebarBackdrop.addEventListener('click', closeSidebar);
 
-        // Swipe up gesture to open sidebar
-        let touchStartY = 0;
-        let touchEndY = 0;
-        const swipeThreshold = 50; // Minimum swipe distance
+        // Swipe gesture disabled - sidebar only opens via menu icon click
+        // Removed swipe-to-open functionality as per user request
 
-        document.addEventListener('touchstart', function(e) {
-            touchStartY = e.changedTouches[0].screenY;
-        }, { passive: true });
-
-        document.addEventListener('touchend', function(e) {
-            touchEndY = e.changedTouches[0].screenY;
-            handleSwipe();
-        }, { passive: true });
-
-        function handleSwipe() {
-            // Only handle swipe if sidebar is closed
-            if (!sidebar.classList.contains('show')) {
-                const swipeDistance = touchStartY - touchEndY;
-                
-                // Swipe up from bottom 20% of screen to open
-                const screenBottom = window.innerHeight * 0.8;
-                const touchStartScreenY = touchStartY;
-                
-                if (swipeDistance > swipeThreshold && touchStartScreenY > screenBottom) {
-                    openSidebar();
-                }
-            } else {
-                // Swipe down to close when sidebar is open
-                const swipeDistance = touchEndY - touchStartY;
-                if (swipeDistance > swipeThreshold) {
-                    closeSidebar();
-                }
-            }
-        }
-
-        // Close sidebar when clicking outside on mobile
+        // Close sidebar when clicking on backdrop or outside on mobile (only when sidebar is open)
         document.addEventListener('click', function(e) {
             if (window.innerWidth <= 768 && sidebar.classList.contains('show')) {
-                if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) {
+                // Only close if clicking on backdrop or outside sidebar (not on sidebar itself or toggle button)
+                const isClickOnBackdrop = e.target === sidebarBackdrop;
+                const isClickOutside = !sidebar.contains(e.target) && !sidebarToggle.contains(e.target);
+                
+                if (isClickOnBackdrop || isClickOutside) {
                     closeSidebar();
                 }
             }

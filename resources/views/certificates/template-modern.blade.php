@@ -465,7 +465,8 @@
             <div class="certificate-header">
                 <img src="{{ public_path('logo.png') }}" 
                      alt="Logo" 
-                     class="certificate-logo">
+                     class="certificate-logo"
+                     onerror="this.style.display='none'">
                 <div class="certificate-title">{{ request('certification_title', 'CERTIFICATION') }}</div>
                 <div class="title-underline"></div>
             </div>
@@ -512,7 +513,7 @@
                     </div>
                 </div>
                 <div class="website-section">
-                    <img src="{{ public_path('ketm5.png') }}" alt="Almajd Academy" class="website-logo">
+                    <img src="{{ public_path('ketm5.png') }}" alt="Almajd Academy" class="website-logo" onerror="this.style.display='none'">
                     <span class="website-url">www.almajdacademy.org</span>
                 </div>
             </div>

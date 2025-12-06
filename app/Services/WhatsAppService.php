@@ -7,8 +7,8 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsAppService
 {
-    private const API_URL = 'https://whatsapp.almajdmeet.org/api/send-message';
-    private const API_KEY = 'wa_0a381aea0cb647ab963fe12ea55a2629';
+    private const API_URL = 'https://whatsapp.almajd.info/api/send-message';
+    private const API_KEY = 'wa_961bc0614f0e4a48afe217fbd1a661a3';
 
     /**
      * Send a WhatsApp message
