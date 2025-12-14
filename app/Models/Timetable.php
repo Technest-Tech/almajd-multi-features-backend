@@ -13,6 +13,7 @@ class Timetable extends Model
 
     protected $fillable = [
         'student_id',
+        'calendar_student_id',
         'teacher_id',
         'course_name',
         'timezone',
@@ -36,11 +37,19 @@ class Timetable extends Model
     }
 
     /**
-     * Get the student that owns the timetable
+     * Get the student that owns the timetable (from users table - legacy)
      */
     public function student(): BelongsTo
     {
         return $this->belongsTo(User::class, 'student_id');
+    }
+
+    /**
+     * Get the calendar student that owns the timetable (isolated from users table)
+     */
+    public function calendarStudent(): BelongsTo
+    {
+        return $this->belongsTo(CalendarStudent::class, 'calendar_student_id');
     }
 
     /**

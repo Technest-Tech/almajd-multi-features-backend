@@ -82,6 +82,33 @@ class TimetableController extends Controller
     }
 
     /**
+     * Display the teacher view-only timetable calendar.
+     */
+    public function teacherView(Request $request)
+    {
+        // Get teacher_id from query parameter
+        $teacherId = $request->query('teacher_id');
+        
+        if (!$teacherId) {
+            // If no teacher_id provided, return error or redirect
+            return redirect()->route('timetable.index')
+                ->with('error', 'Teacher ID is required');
+        }
+
+        // Verify teacher exists
+        $teacher = User::where('id', $teacherId)
+            ->where('user_type', UserType::Teacher)
+            ->first();
+
+        if (!$teacher) {
+            return redirect()->route('timetable.index')
+                ->with('error', 'Teacher not found');
+        }
+
+        return view('timetable.teacher-view', compact('teacherId'));
+    }
+
+    /**
      * Get events as JSON for FullCalendar.
      */
     public function events(Request $request): JsonResponse

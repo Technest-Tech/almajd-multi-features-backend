@@ -36,7 +36,9 @@ class LessonController extends Controller
             return response()->json(['error' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             Log::error('Error creating lesson: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to create lesson'], 500);
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Request data: ' . json_encode($request->all()));
+            return response()->json(['error' => $e->getMessage() ?: 'Failed to create lesson'], 500);
         }
     }
 

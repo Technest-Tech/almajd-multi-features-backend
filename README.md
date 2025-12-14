@@ -140,11 +140,25 @@ Uploaded logos are stored in `storage/app/public/certificates/logos/` and are ac
 
 ### Running the Server
 
+**For local development (emulator/simulator):**
 ```bash
 php artisan serve
 ```
-
 The application will be available at `http://localhost:8000`
+
+**For physical device testing:**
+```bash
+php artisan serve --host=0.0.0.0 --port=8000
+```
+This makes the server accessible from other devices on your network.
+
+**Important for physical devices:**
+1. Make sure your phone and computer are on the same WiFi network
+2. Find your computer's IP address:
+   - macOS/Linux: `ifconfig | grep "inet " | grep -v 127.0.0.1`
+   - Windows: `ipconfig` (look for IPv4 Address)
+3. Update the Flutter app's `AppConfig.backendBaseUrl` to use your IP (e.g., `http://192.168.1.23:8000`)
+4. Ensure your firewall allows connections on port 8000
 
 ### Code Structure
 

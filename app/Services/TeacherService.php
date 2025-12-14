@@ -38,6 +38,8 @@ class TeacherService
     {
         $data['user_type'] = UserType::Teacher;
         $data['password'] = bcrypt($data['password']);
+        // All teachers must use EGP currency
+        $data['currency'] = 'EGP';
 
         $teacher = User::create($data);
 
@@ -54,6 +56,8 @@ class TeacherService
         if (isset($data['password'])) {
             $data['password'] = bcrypt($data['password']);
         }
+        // All teachers must use EGP currency
+        $data['currency'] = 'EGP';
 
         $teacher->update($data);
 

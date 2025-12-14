@@ -25,7 +25,7 @@ class StoreLessonRequest extends FormRequest
             'course_id' => ['required', 'exists:courses,id'],
             'date' => ['required', 'date', 'after_or_equal:today'],
             'duration' => ['required', 'integer', 'min:1'],
-            'status' => ['nullable', 'in:planned,completed,missed,cancelled'],
+            // Status is always 'present' by default, not user-selectable
             'notes' => ['nullable', 'string'],
             'duty' => ['nullable', 'numeric', 'min:0'],
         ];

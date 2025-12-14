@@ -26,9 +26,15 @@ class AuthController extends Controller
         $user = Auth::user();
         $token = $user->createToken('auth-token')->plainTextToken;
 
+        // Ensure user_type is returned as string value for Flutter compatibility
+        $userData = $user->toArray();
+        if (isset($userData['user_type']) && $userData['user_type'] instanceof \App\Enums\UserType) {
+            $userData['user_type'] = $userData['user_type']->value;
+        }
+
         return response()->json([
             'token' => $token,
-            'user' => $user,
+            'user' => $userData,
         ]);
     }
 
@@ -41,6 +47,14 @@ class AuthController extends Controller
 
     public function user(Request $request): JsonResponse
     {
-        return response()->json($request->user());
+        $user = $request->user();
+        
+        // Ensure user_type is returned as string value for Flutter compatibility
+        $userData = $user->toArray();
+        if (isset($userData['user_type']) && $userData['user_type'] instanceof \App\Enums\UserType) {
+            $userData['user_type'] = $userData['user_type']->value;
+        }
+        
+        return response()->json($userData);
     }
 }

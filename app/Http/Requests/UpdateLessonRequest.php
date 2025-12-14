@@ -25,7 +25,7 @@ class UpdateLessonRequest extends FormRequest
             'course_id' => ['sometimes', 'required', 'exists:courses,id'],
             'date' => ['sometimes', 'required', 'date', 'after_or_equal:today'],
             'duration' => ['sometimes', 'required', 'integer', 'min:1'],
-            'status' => ['nullable', 'in:planned,completed,missed,cancelled'],
+            // Status is always 'present' by default, not user-selectable
             'notes' => ['nullable', 'string'],
             'duty' => ['nullable', 'numeric', 'min:0'],
         ];

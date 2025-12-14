@@ -15,12 +15,11 @@ class DashboardService
         $totalStudents = User::where('user_type', UserType::Student)->count();
         $totalTeachers = User::where('user_type', UserType::Teacher)->count();
         
-        // Calculate total hours from completed lessons
-        $totalHours = Lesson::where('status', 'completed')
-            ->sum(DB::raw('duration')) / 60; // Convert minutes to hours
+        // Calculate total hours from lessons (all lessons are 'present' by default)
+        $totalHours = Lesson::sum(DB::raw('duration')) / 60; // Convert minutes to hours
 
-        // Calculate profit by currency
-        $profitByCurrencyCollection = Lesson::where('status', 'completed')
+        // Calculate profit by currency (all lessons are 'present' by default)
+        $profitByCurrencyCollection = Lesson::query()
             ->join('courses', 'lessons.course_id', '=', 'courses.id')
             ->join('users as students', 'courses.student_id', '=', 'students.id')
             ->select(
@@ -33,15 +32,28 @@ class DashboardService
         
         $profitByCurrency = [];
         foreach ($profitByCurrencyCollection as $item) {
-            $profitByCurrency[(string) $item->currency] = (float) $item->total_profit;
+            // Handle currency enum or string
+            $currencyValue = $item->currency instanceof \App\Enums\Currency 
+                ? $item->currency->value 
+                : (string) $item->currency;
+            $profitByCurrency[$currencyValue] = (float) $item->total_profit;
         }
 
-        // Calculate total salaries (sum of teacher hour_price * completed lesson hours)
-        $totalSalaries = Lesson::where('status', 'completed')
+        // Calculate ALL salaries in EGP (all lessons are 'present' by default)
+        // All teachers use EGP currency, so we don't need to group by currency
+        $totalSalariesEGP = Lesson::query()
             ->join('courses', 'lessons.course_id', '=', 'courses.id')
             ->join('users as teachers', 'courses.teacher_id', '=', 'teachers.id')
-            ->select(DB::raw('SUM(lessons.duration / 60 * COALESCE(lessons.duty, teachers.hour_price)) as total'))
-            ->value('total') ?? 0;
+            ->where('teachers.user_type', UserType::Teacher)
+            ->whereNotNull('teachers.hour_price')
+            ->select(DB::raw('SUM(lessons.duration / 60 * COALESCE(lessons.duty, teachers.hour_price)) as total_salary'))
+            ->value('total_salary') ?? 0.0;
+        
+        // All salaries are in EGP, so totals are the same
+        $totalSalaries = $totalSalariesEGP;
+        
+        // For backward compatibility, set salaries_by_currency with only EGP
+        $salariesByCurrency = ['EGP' => $totalSalariesEGP];
 
         // Calculate net profit (total profit - total salaries)
         $totalProfit = array_sum($profitByCurrency);
@@ -52,6 +64,8 @@ class DashboardService
             'total_teachers' => $totalTeachers,
             'total_hours' => round($totalHours, 2),
             'total_salaries' => round($totalSalaries, 2),
+            'total_salaries_egp' => round($totalSalariesEGP, 2),
+            'salaries_by_currency' => $salariesByCurrency,
             'profit_by_currency' => $profitByCurrency,
             'total_profit' => round($totalProfit, 2),
             'net_profit' => round($netProfit, 2),
@@ -68,21 +82,19 @@ class DashboardService
 
         $assignedStudentsCount = $teacher->assignedStudents()->count();
 
-        // Hours this month
+        // Hours this month (all lessons are 'present' by default)
         $currentMonth = Carbon::now()->month;
         $currentYear = Carbon::now()->year;
         
-        $hoursThisMonth = Lesson::where('status', 'completed')
-            ->whereHas('course', function ($query) use ($teacherId) {
+        $hoursThisMonth = Lesson::whereHas('course', function ($query) use ($teacherId) {
                 $query->where('teacher_id', $teacherId);
             })
             ->whereYear('date', $currentYear)
             ->whereMonth('date', $currentMonth)
             ->sum(DB::raw('duration')) / 60;
 
-        // Total profit (sum of duty from completed lessons)
-        $totalProfit = Lesson::where('status', 'completed')
-            ->whereHas('course', function ($query) use ($teacherId) {
+        // Total profit (sum of duty from lessons - all are 'present' by default)
+        $totalProfit = Lesson::whereHas('course', function ($query) use ($teacherId) {
                 $query->where('teacher_id', $teacherId);
             })
             ->sum('duty') ?? 0;

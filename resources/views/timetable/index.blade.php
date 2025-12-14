@@ -238,6 +238,28 @@
             padding: 15px;
         }
 
+        .embedded-calendar-wrapper {
+            width: 100%;
+            margin-top: 20px;
+            position: relative;
+        }
+
+        .embedded-calendar-wrapper iframe {
+            width: 100%;
+            height: calc(100vh - 200px);
+            min-height: 800px;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        @media screen and (max-width: 768px) {
+            .embedded-calendar-wrapper iframe {
+                height: calc(100vh - 150px);
+                min-height: 600px;
+            }
+        }
+
         .view-section {
             display: none;
         }
@@ -1361,6 +1383,83 @@
             font-size: 16px;
         }
 
+        /* Calendar Students Styles */
+        .calendar-students-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 20px;
+        }
+
+        .calendar-students-table {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        .calendar-students-table table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .calendar-students-table thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .calendar-students-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .calendar-students-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 14px;
+        }
+
+        .calendar-students-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .calendar-students-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .pagination-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .btn-pagination {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-pagination:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .error-message {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
         /* Mobile Responsive Styles */
         @media screen and (max-width: 768px) {
             body {
@@ -1714,6 +1813,10 @@
                 <i class="fas fa-list"></i>
                 <span>All Timetables</span>
             </button>
+            <button class="sidebar-btn" data-view="calendar-students">
+                <i class="fas fa-user-graduate"></i>
+                <span>Calendar Students</span>
+            </button>
             <button class="sidebar-btn" data-view="settings">
                 <i class="fas fa-cog"></i>
                 <span>Settings</span>
@@ -1739,10 +1842,6 @@
             <!-- Calendar View -->
             <div class="view-section active" id="calendarView">
                 <div class="calendar-container">
-                    <div class="loading-overlay" id="loadingOverlay">
-                        <div class="spinner"></div>
-                    </div>
-
                     <div class="calendar-header">
                         <h1 class="calendar-title">
                             <i class="fas fa-calendar-alt"></i>
@@ -1750,71 +1849,16 @@
                         </h1>
                     </div>
 
-                    <div class="filters-section collapsed" id="filtersSection">
-                        <div class="filters-header" onclick="toggleFilters()">
-                            <div class="filters-title">
-                                <i class="fas fa-filter"></i>
-                                <span>Filters</span>
-                            </div>
-                            <button type="button" class="filters-toggle" id="filtersToggle" aria-label="Toggle filters">
-                                <i class="fas fa-chevron-down"></i>
-                            </button>
-                        </div>
-                        <div class="filters-content">
-            <form id="filterForm">
-                <div class="filters-row">
-                    <div class="filter-group">
-                        <label for="studentFilter">Student</label>
-                        <select id="studentFilter" name="student_id" class="form-select" onchange="applyCalendarFilters()">
-                            <option value="">All Students</option>
-                            @foreach($students as $student)
-                                <option value="{{ $student->id }}" {{ isset($filters['student_id']) && $filters['student_id'] == $student->id ? 'selected' : '' }}>
-                                    {{ $student->name }}
-                                </option>
-                            @endforeach
-                        </select>
+                    <!-- Embedded Reminders Site -->
+                    <div class="embedded-calendar-wrapper">
+                        <iframe 
+                            id="remindersIframe"
+                            src="https://reminders.maccaacademy.com/" 
+                            frameborder="0" 
+                            allowfullscreen
+                            style="width: 100%; height: calc(100vh - 200px); min-height: 800px; border: none; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                        </iframe>
                     </div>
-
-                    <div class="filter-group">
-                        <label for="teacherFilter">Teacher</label>
-                        <select id="teacherFilter" name="teacher_id" class="form-select" onchange="applyCalendarFilters()">
-                            <option value="">All Teachers</option>
-                            @foreach($teachers as $teacher)
-                                <option value="{{ $teacher->id }}" {{ isset($filters['teacher_id']) && $filters['teacher_id'] == $teacher->id ? 'selected' : '' }}>
-                                    {{ $teacher->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="filter-group">
-                        <label for="fromDate">From Date</label>
-                        <input type="date" id="fromDate" name="from_date" class="form-control" value="{{ $filters['from_date'] ?? '' }}">
-                    </div>
-
-                    <div class="filter-group">
-                        <label for="toDate">To Date</label>
-                        <input type="date" id="toDate" name="to_date" class="form-control" value="{{ $filters['to_date'] ?? '' }}">
-                    </div>
-
-                    <div class="filter-group">
-                        <button type="submit" class="apply-filters-btn">
-                            <i class="fas fa-filter"></i> Apply Filters
-                        </button>
-                    </div>
-                </div>
-
-                <div class="quick-filters">
-                    <button type="button" class="quick-filter-btn" data-filter="today">Today</button>
-                    <button type="button" class="quick-filter-btn" data-filter="week">This Week</button>
-                    <button type="button" class="quick-filter-btn" data-filter="month">This Month</button>
-                    <button type="button" class="quick-filter-btn" data-filter="clear">Clear Filters</button>
-                    </div>
-                    </form>
-                        </div>
-                </div>
-
-                <div id="calendar"></div>
                 </div>
             </div>
 
@@ -1966,6 +2010,42 @@
                                 <p>No timetables available at the moment.</p>
                             </div>
                         @endif
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calendar Students View -->
+            <div class="view-section" id="calendarStudentsView">
+                <div class="calendar-students-container">
+                    <div class="calendar-header">
+                        <h1 class="calendar-title">
+                            <i class="fas fa-user-graduate"></i>
+                            <span>Calendar Students</span>
+                        </h1>
+                        <button type="button" class="btn-create-timetable-inline" onclick="openAddCalendarStudentModal()">
+                            <i class="fas fa-plus"></i> Add Student
+                        </button>
+                    </div>
+
+                    <div class="search-section">
+                        <div class="search-input-wrapper">
+                            <i class="fas fa-search"></i>
+                            <input type="text" 
+                                   id="calendarStudentSearch" 
+                                   class="search-input" 
+                                   placeholder="Search students by name..."
+                                   oninput="searchCalendarStudents(this.value)">
+                            <button type="button" class="search-clear" id="calendarStudentSearchClear" onclick="clearCalendarStudentSearch()" title="Clear search" style="display: none;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="calendar-students-list-content" id="calendarStudentsListContent">
+                        <div class="loading-overlay" id="calendarStudentsLoading" style="display: none;">
+                            <div class="spinner"></div>
+                        </div>
+                        <!-- Students will be loaded here via AJAX -->
                     </div>
                 </div>
             </div>
@@ -2221,6 +2301,37 @@
         </div>
     </div>
 
+    <!-- Calendar Student Modal -->
+    <div id="calendarStudentModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 id="calendarStudentModalTitle"><i class="fas fa-user-graduate"></i> Add Calendar Student</h3>
+                <button class="modal-close" onclick="closeCalendarStudentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="calendarStudentForm" onsubmit="saveCalendarStudent(event)">
+                    <div class="form-group">
+                        <label for="calendarStudentName">Student Name *</label>
+                        <input type="text" 
+                               id="calendarStudentName" 
+                               name="name" 
+                               class="form-control" 
+                               placeholder="Enter student name"
+                               required
+                               maxlength="255">
+                        <div id="calendarStudentNameError" class="error-message" style="display: none;"></div>
+                    </div>
+                    <div class="modal-footer-buttons" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e9ecef;">
+                        <button type="button" class="btn-cancel" onclick="closeCalendarStudentModal()">Cancel</button>
+                        <button type="submit" class="btn-confirm" id="calendarStudentSubmitBtn">
+                            <span id="calendarStudentSubmitBtnText">Save</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- FullCalendar JS -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -2229,10 +2340,17 @@
         let calendar;
         const isMobile = window.innerWidth <= 768;
 
-        // Refresh Calendar Function
+        // Refresh Calendar Function - Reload iframe
         function refreshCalendar() {
-            if (calendar) {
-                calendar.refetchEvents();
+            const iframe = document.getElementById('remindersIframe');
+            if (iframe) {
+                // Reload the iframe by resetting its src
+                const currentSrc = iframe.src;
+                iframe.src = '';
+                setTimeout(() => {
+                    iframe.src = currentSrc;
+                }, 100);
+                
                 // Add visual feedback
                 const refreshBtn = document.querySelector('.topbar-actions button[onclick="refreshCalendar()"]');
                 if (refreshBtn) {
@@ -2269,8 +2387,15 @@
             filtersToggle.classList.remove('rotated');
         }
 
-        // Initialize FullCalendar
+        // Initialize FullCalendar - DISABLED: Using embedded iframe instead
         document.addEventListener('DOMContentLoaded', function() {
+            // Check if we're using the embedded iframe (calendar element doesn't exist)
+            const calendarEl = document.getElementById('calendar');
+            if (!calendarEl) {
+                // Using embedded iframe, skip FullCalendar initialization
+                return;
+            }
+            
             // Clear default date values if they're not in URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             const fromDateInput = document.getElementById('fromDate');
@@ -2292,8 +2417,6 @@
                     checkFiltersState();
                 }, 100);
             }
-            
-            const calendarEl = document.getElementById('calendar');
             
             calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: isMobile ? 'timeGridDay' : 'timeGridDay',
@@ -2383,14 +2506,19 @@
 
             calendar.render();
 
-            // Handle filter form submission
-            document.getElementById('filterForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                updateURLFromFilters();
-                calendar.refetchEvents();
-                // Keep filters section open after applying filters
-                // Don't call checkFiltersState() here - let user decide when to close
-            });
+            // Handle filter form submission (only if filterForm exists - not used with iframe)
+            const filterForm = document.getElementById('filterForm');
+            if (filterForm) {
+                filterForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    updateURLFromFilters();
+                    if (calendar) {
+                        calendar.refetchEvents();
+                    }
+                    // Keep filters section open after applying filters
+                    // Don't call checkFiltersState() here - let user decide when to close
+                });
+            }
 
             // Quick filter buttons
             document.querySelectorAll('.quick-filter-btn').forEach(btn => {
@@ -2407,12 +2535,14 @@
                 }
             });
 
-            // Handle window resize
+            // Handle window resize (only if calendar exists)
             let resizeTimer;
             window.addEventListener('resize', function() {
                 clearTimeout(resizeTimer);
                 resizeTimer = setTimeout(function() {
-                    calendar.updateSize();
+                    if (calendar) {
+                        calendar.updateSize();
+                    }
                 }, 250);
             });
         });
@@ -2985,6 +3115,8 @@
                     }
                 } else if (view === 'timetables') {
                     document.getElementById('timetablesView').classList.add('active');
+                } else if (view === 'calendar-students') {
+                    showCalendarStudentsView();
                 } else if (view === 'settings') {
                     document.getElementById('settingsView').classList.add('active');
                 }
@@ -3839,6 +3971,330 @@
                 console.error('Error:', error);
                 showErrorMessage('An error occurred while sending WhatsApp reminder');
             });
+        }
+
+        // ==================== Calendar Students Management ====================
+        
+        let currentEditingStudentId = null;
+
+        function showCalendarStudentsView() {
+            document.getElementById('calendarStudentsView').classList.add('active');
+            loadCalendarStudents();
+        }
+
+        function loadCalendarStudents() {
+            const loadingOverlay = document.getElementById('calendarStudentsLoading');
+            const listContent = document.getElementById('calendarStudentsListContent');
+            
+            loadingOverlay.style.display = 'flex';
+            
+            fetch('{{ route("calendar-students.index") }}', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingOverlay.style.display = 'none';
+                
+                if (data.data && data.data.length > 0) {
+                    let html = '<div class="calendar-students-table">';
+                    html += '<table class="table">';
+                    html += '<thead><tr><th>Name</th><th>Created Date</th><th>Actions</th></tr></thead>';
+                    html += '<tbody>';
+                    
+                    data.data.forEach(student => {
+                        const createdDate = new Date(student.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                        });
+                        
+                        html += `<tr>
+                            <td><strong>${escapeHtml(student.name)}</strong></td>
+                            <td>${createdDate}</td>
+                            <td>
+                                <button type="button" class="btn-action btn-edit" onclick="openEditCalendarStudentModal(${student.id}, '${escapeHtml(student.name)}')" title="Edit">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button type="button" class="btn-action btn-delete" onclick="deleteCalendarStudent(${student.id}, '${escapeHtml(student.name)}')" title="Delete">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                    
+                    // Add pagination if available
+                    if (data.links && data.links.length > 3) {
+                        html += '<div class="pagination-wrapper">';
+                        // Simple pagination - you can enhance this later
+                        if (data.current_page > 1) {
+                            html += `<button onclick="loadCalendarStudentsPage(${data.current_page - 1})" class="btn-pagination">Previous</button>`;
+                        }
+                        html += `<span>Page ${data.current_page} of ${data.last_page}</span>`;
+                        if (data.current_page < data.last_page) {
+                            html += `<button onclick="loadCalendarStudentsPage(${data.current_page + 1})" class="btn-pagination">Next</button>`;
+                        }
+                        html += '</div>';
+                    }
+                    
+                    listContent.innerHTML = html;
+                } else {
+                    listContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-user-graduate"></i>
+                            <h3>No Calendar Students Found</h3>
+                            <p>No calendar students available. Click "Add Student" to create one.</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                loadingOverlay.style.display = 'none';
+                console.error('Error loading calendar students:', error);
+                listContent.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Error Loading Students</h3>
+                        <p>Failed to load calendar students. Please try again.</p>
+                    </div>
+                `;
+            });
+        }
+
+        function loadCalendarStudentsPage(page) {
+            const searchQuery = document.getElementById('calendarStudentSearch').value;
+            const url = new URL('{{ route("calendar-students.index") }}', window.location.origin);
+            url.searchParams.set('page', page);
+            if (searchQuery) {
+                url.searchParams.set('search', searchQuery);
+            }
+            
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Update the list with new data
+                loadCalendarStudents();
+            })
+            .catch(error => {
+                console.error('Error loading page:', error);
+                showErrorMessage('Failed to load page');
+            });
+        }
+
+        function openAddCalendarStudentModal() {
+            currentEditingStudentId = null;
+            document.getElementById('calendarStudentModalTitle').innerHTML = '<i class="fas fa-user-graduate"></i> Add Calendar Student';
+            document.getElementById('calendarStudentSubmitBtnText').textContent = 'Save';
+            document.getElementById('calendarStudentName').value = '';
+            document.getElementById('calendarStudentNameError').style.display = 'none';
+            document.getElementById('calendarStudentNameError').textContent = '';
+            document.getElementById('calendarStudentModal').classList.add('show');
+        }
+
+        function openEditCalendarStudentModal(id, name) {
+            currentEditingStudentId = id;
+            document.getElementById('calendarStudentModalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Calendar Student';
+            document.getElementById('calendarStudentSubmitBtnText').textContent = 'Update';
+            document.getElementById('calendarStudentName').value = name;
+            document.getElementById('calendarStudentNameError').style.display = 'none';
+            document.getElementById('calendarStudentNameError').textContent = '';
+            document.getElementById('calendarStudentModal').classList.add('show');
+        }
+
+        function closeCalendarStudentModal() {
+            document.getElementById('calendarStudentModal').classList.remove('show');
+            currentEditingStudentId = null;
+            document.getElementById('calendarStudentForm').reset();
+            document.getElementById('calendarStudentNameError').style.display = 'none';
+            document.getElementById('calendarStudentNameError').textContent = '';
+        }
+
+        function saveCalendarStudent(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('calendarStudentName').value.trim();
+            const errorDiv = document.getElementById('calendarStudentNameError');
+            const submitBtn = document.getElementById('calendarStudentSubmitBtn');
+            const originalText = document.getElementById('calendarStudentSubmitBtnText').textContent;
+            
+            if (!name) {
+                errorDiv.textContent = 'Student name is required';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            errorDiv.style.display = 'none';
+            submitBtn.disabled = true;
+            document.getElementById('calendarStudentSubmitBtnText').textContent = 'Saving...';
+            
+            const url = currentEditingStudentId 
+                ? `{{ url('calendar-students') }}/${currentEditingStudentId}`
+                : '{{ route("calendar-students.store") }}';
+            const method = currentEditingStudentId ? 'PUT' : 'POST';
+            
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ name: name })
+            })
+            .then(response => response.json())
+            .then(data => {
+                submitBtn.disabled = false;
+                document.getElementById('calendarStudentSubmitBtnText').textContent = originalText;
+                
+                if (data.success) {
+                    closeCalendarStudentModal();
+                    showSuccessMessage(data.message || 'Calendar student saved successfully!');
+                    loadCalendarStudents();
+                } else {
+                    if (data.errors && data.errors.name) {
+                        errorDiv.textContent = Array.isArray(data.errors.name) ? data.errors.name[0] : data.errors.name;
+                        errorDiv.style.display = 'block';
+                    } else {
+                        showErrorMessage(data.message || 'Failed to save calendar student');
+                    }
+                }
+            })
+            .catch(error => {
+                submitBtn.disabled = false;
+                document.getElementById('calendarStudentSubmitBtnText').textContent = originalText;
+                console.error('Error saving calendar student:', error);
+                showErrorMessage('An error occurred while saving calendar student');
+            });
+        }
+
+        function deleteCalendarStudent(id, name) {
+            if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+                return;
+            }
+            
+            fetch(`{{ url('calendar-students') }}/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccessMessage(data.message || 'Calendar student deleted successfully!');
+                    loadCalendarStudents();
+                } else {
+                    showErrorMessage(data.message || 'Failed to delete calendar student');
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting calendar student:', error);
+                showErrorMessage('An error occurred while deleting calendar student');
+            });
+        }
+
+        let searchTimeout;
+        function searchCalendarStudents(query) {
+            const searchClear = document.getElementById('calendarStudentSearchClear');
+            if (query.trim()) {
+                searchClear.style.display = 'block';
+            } else {
+                searchClear.style.display = 'none';
+                loadCalendarStudents();
+                return;
+            }
+            
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                const url = new URL('{{ route("calendar-students.index") }}', window.location.origin);
+                url.searchParams.set('search', query);
+                
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const listContent = document.getElementById('calendarStudentsListContent');
+                    
+                    if (data.data && data.data.length > 0) {
+                        let html = '<div class="calendar-students-table">';
+                        html += '<table class="table">';
+                        html += '<thead><tr><th>Name</th><th>Created Date</th><th>Actions</th></tr></thead>';
+                        html += '<tbody>';
+                        
+                        data.data.forEach(student => {
+                            const createdDate = new Date(student.created_at).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                            });
+                            
+                            html += `<tr>
+                                <td><strong>${escapeHtml(student.name)}</strong></td>
+                                <td>${createdDate}</td>
+                                <td>
+                                    <button type="button" class="btn-action btn-edit" onclick="openEditCalendarStudentModal(${student.id}, '${escapeHtml(student.name)}')" title="Edit">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    <button type="button" class="btn-action btn-delete" onclick="deleteCalendarStudent(${student.id}, '${escapeHtml(student.name)}')" title="Delete">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </td>
+                            </tr>`;
+                        });
+                        
+                        html += '</tbody></table></div>';
+                        listContent.innerHTML = html;
+                    } else {
+                        listContent.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-search"></i>
+                                <h3>No Results Found</h3>
+                                <p>No calendar students match your search query.</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching calendar students:', error);
+                    showErrorMessage('Failed to search calendar students');
+                });
+            }, 300);
+        }
+
+        function clearCalendarStudentSearch() {
+            document.getElementById('calendarStudentSearch').value = '';
+            document.getElementById('calendarStudentSearchClear').style.display = 'none';
+            loadCalendarStudents();
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
     </script>
 </body>
