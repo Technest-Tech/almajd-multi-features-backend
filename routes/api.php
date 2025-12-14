@@ -38,6 +38,9 @@ Route::get('/calendar/students/list', [CalendarController::class, 'getStudentsLi
 
 // Public Calendar Teachers routes
 Route::apiResource('calendar-teachers', CalendarTeacherController::class);
+// Alias for typo compatibility (calender-teachers -> calendar-teachers)
+Route::get('/calender-teachers', [CalendarTeacherController::class, 'index']);
+Route::get('/calender-teachers/{id}', [CalendarTeacherController::class, 'show']);
 
 // Public Calendar Student Stops routes
 Route::apiResource('calendar-student-stops', CalendarStudentStopController::class);
