@@ -14,14 +14,26 @@ class SalaryService
      * 
      * @param int $year
      * @param int $month
+     * @param float|null $unifiedHourPrice Optional unified hour price for teachers without specific price
      * @return array
      */
-    public function getTeacherSalaries(int $year, int $month): array
+    public function getTeacherSalaries(int $year, int $month, ?float $unifiedHourPrice = null): array
     {
-        // Get all teachers
-        $teachers = User::where('user_type', UserType::Teacher)
-            ->whereNotNull('hour_price')
-            ->get();
+        // Get all teachers with hour_price
+        $teachersQuery = User::where('user_type', UserType::Teacher);
+        
+        if ($unifiedHourPrice !== null) {
+            // Include teachers without hour_price when unified price is provided
+            $teachersQuery->where(function ($query) {
+                $query->whereNotNull('hour_price')
+                      ->orWhereNull('hour_price');
+            });
+        } else {
+            // Only get teachers with hour_price
+            $teachersQuery->whereNotNull('hour_price');
+        }
+        
+        $teachers = $teachersQuery->get();
 
         $salaries = [];
         $totalsByCurrency = [];
@@ -44,8 +56,16 @@ class SalaryService
             $totalMinutes = $lessons->sum('duration');
             $totalHours = $totalMinutes / 60;
 
-            // Calculate salary: total_hours * teacher.hour_price
-            $salary = $totalHours * (float) $teacher->hour_price;
+            // Determine hour price: use teacher's price if available, otherwise use unified price
+            $hourPrice = $teacher->hour_price ?? $unifiedHourPrice;
+            
+            // Skip if no hour price available
+            if ($hourPrice === null) {
+                continue;
+            }
+
+            // Calculate salary: total_hours * hour_price
+            $salary = $totalHours * (float) $hourPrice;
 
             // All teachers use EGP currency
             $currency = 'EGP';
@@ -58,7 +78,7 @@ class SalaryService
                 'total_hours' => round($totalHours, 2),
                 'salary' => round($salary, 2),
                 'lessons_count' => $lessons->count(),
-                'hour_price' => (float) $teacher->hour_price,
+                'hour_price' => (float) $hourPrice,
             ];
 
             // Accumulate totals in EGP only

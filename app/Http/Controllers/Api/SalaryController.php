@@ -62,7 +62,13 @@ class SalaryController extends Controller
                 return response()->json(['error' => 'Invalid month'], 400);
             }
 
-            $result = $this->salaryService->getTeacherSalaries((int) $year, (int) $month);
+            $unifiedHourPrice = $request->input('unified_hour_price');
+            $unifiedHourPriceFloat = null;
+            if ($unifiedHourPrice !== null && is_numeric($unifiedHourPrice)) {
+                $unifiedHourPriceFloat = (float) $unifiedHourPrice;
+            }
+
+            $result = $this->salaryService->getTeacherSalaries((int) $year, (int) $month, $unifiedHourPriceFloat);
 
             // Check if there are any salaries to export
             if (empty($result['salaries'])) {
