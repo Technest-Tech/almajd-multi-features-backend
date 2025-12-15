@@ -99,13 +99,22 @@ class UpdateTeacherWhatsAppSeeder extends Seeder
                 $matched++;
                 $processedUserIds[] = $matchedUser->id;
                 
-                // Update if whatsapp is different or empty
+                // Update if whatsapp is different or empty, or country is not EG
+                $needsUpdate = false;
                 if ($matchedUser->whatsapp_number !== $whatsapp) {
+                    $needsUpdate = true;
+                }
+                if ($matchedUser->country !== 'EG') {
+                    $needsUpdate = true;
+                }
+                
+                if ($needsUpdate) {
                     $oldWhatsapp = $matchedUser->whatsapp_number ?? '(empty)';
                     $matchedUser->whatsapp_number = $whatsapp;
+                    $matchedUser->country = 'EG'; // Set country to Egypt
                     $matchedUser->save();
                     $updated++;
-                    $this->command->info("✓ Updated: {$matchedUser->name} ({$oldWhatsapp} → {$whatsapp})");
+                    $this->command->info("✓ Updated: {$matchedUser->name} ({$oldWhatsapp} → {$whatsapp}) [Country: EG]");
                 } else {
                     $this->command->info("  Already set: {$matchedUser->name} ({$whatsapp})");
                 }
@@ -162,9 +171,10 @@ class UpdateTeacherWhatsAppSeeder extends Seeder
                 $processedUserIds[] = $matchedUser->id;
                 $oldWhatsapp = $matchedUser->whatsapp_number ?? '(empty)';
                 $matchedUser->whatsapp_number = $whatsapp;
+                $matchedUser->country = 'EG'; // Set country to Egypt
                 $matchedUser->save();
                 $updated++;
-                $this->command->info("✓ Updated (partial match): {$matchedUser->name} ({$oldWhatsapp} → {$whatsapp}) [matched with: {$sqlName}]");
+                $this->command->info("✓ Updated (partial match): {$matchedUser->name} ({$oldWhatsapp} → {$whatsapp}) [matched with: {$sqlName}] [Country: EG]");
             } else {
                 $remainingNotMatched[] = $sqlTeacher;
             }
@@ -229,26 +239,66 @@ class UpdateTeacherWhatsAppSeeder extends Seeder
     }
 
     /**
-     * Normalize WhatsApp number format
+     * Normalize WhatsApp number format to Egypt (+20)
      */
     private function normalizeWhatsApp(string $whatsapp): string
     {
-        // Remove all spaces
-        $whatsapp = preg_replace('/\s+/', '', $whatsapp);
+        // Remove all spaces and non-digit characters except +
+        $whatsapp = preg_replace('/[^\d+]/', '', $whatsapp);
         
-        // If it doesn't start with +, try to add it for Egyptian numbers
-        if (!str_starts_with($whatsapp, '+')) {
+        // If it starts with +, check if it's already +20
+        if (str_starts_with($whatsapp, '+')) {
+            // If it's already +20 (Egypt), return as is
+            if (str_starts_with($whatsapp, '+20')) {
+                return $whatsapp;
+            }
+            
+            // If it's +1 (US), try to fix it
+            if (str_starts_with($whatsapp, '+1')) {
+                $number = substr($whatsapp, 2);
+                // If the number itself starts with 20, it was a mistake - fix it
+                if (str_starts_with($number, '20')) {
+                    return '+' . $number;
+                }
+                // If it's 10 digits starting with 1, it's likely Egyptian
+                if (preg_match('/^1\d{9}$/', $number)) {
+                    return '+20' . $number;
+                }
+            }
+            
+            // For other country codes, extract the number and check
+            $number = substr($whatsapp, 1);
+            if (str_starts_with($number, '20')) {
+                return '+' . $number;
+            }
+        } else {
+            // No + prefix
             // If it starts with 20, add +
             if (str_starts_with($whatsapp, '20')) {
-                $whatsapp = '+' . $whatsapp;
+                return '+' . $whatsapp;
             }
+            
             // If it starts with 0, replace with +20
-            elseif (str_starts_with($whatsapp, '0')) {
-                $whatsapp = '+20' . substr($whatsapp, 1);
+            if (str_starts_with($whatsapp, '0')) {
+                $number = substr($whatsapp, 1);
+                // If it's 10 digits starting with 1, it's Egyptian mobile
+                if (preg_match('/^1\d{9}$/', $number)) {
+                    return '+20' . $number;
+                }
+                // If it's 9 digits starting with 1, it's Egyptian mobile
+                if (preg_match('/^1\d{8}$/', $number)) {
+                    return '+20' . $number;
+                }
             }
-            // If it's just digits starting with 1, assume it's Egyptian
-            elseif (preg_match('/^1\d{9}$/', $whatsapp)) {
-                $whatsapp = '+20' . $whatsapp;
+            
+            // If it's 10 digits starting with 1, it's likely Egyptian mobile
+            if (preg_match('/^1\d{9}$/', $whatsapp)) {
+                return '+20' . $whatsapp;
+            }
+            
+            // If it's 9 digits starting with 1, it's likely Egyptian mobile
+            if (preg_match('/^1\d{8}$/', $whatsapp)) {
+                return '+20' . $whatsapp;
             }
         }
 
