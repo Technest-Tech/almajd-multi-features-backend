@@ -32,6 +32,7 @@ Route::post('/calendar/exceptional-class', [CalendarController::class, 'storeExc
 Route::delete('/calendar/exceptional-class/{id}', [CalendarController::class, 'deleteExceptionalClass']);
 Route::get('/calendar/exceptional-classes/student', [CalendarController::class, 'getStudentExceptionalClasses']);
 Route::get('/calendar/teacher/{id}/whatsapp', [CalendarController::class, 'getTeacherTimetableWhatsApp']);
+Route::post('/calendar/teacher/{id}/send-whatsapp', [CalendarController::class, 'sendTeacherTimetableWhatsApp']);
 Route::get('/calendar/teacher/{id}/students', [CalendarController::class, 'getTeacherStudents']);
 Route::put('/calendar/student/status', [CalendarController::class, 'updateStudentStatus']);
 Route::get('/calendar/students/list', [CalendarController::class, 'getStudentsList']);

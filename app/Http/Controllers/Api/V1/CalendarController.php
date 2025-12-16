@@ -9,6 +9,7 @@ use App\Models\CalendarTeacher;
 use App\Models\CalendarTeacherTimetable;
 use App\Models\User;
 use App\Enums\UserType;
+use App\Services\WhatsAppService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,12 @@ use Illuminate\Validation\ValidationException;
 
 class CalendarController extends Controller
 {
+    protected $whatsAppService;
+
+    public function __construct(WhatsAppService $whatsAppService)
+    {
+        $this->whatsAppService = $whatsAppService;
+    }
     /**
      * Get calendar events
      * GET /api/v1/calendar/events
@@ -628,6 +635,121 @@ class CalendarController extends Controller
             return response()->json([
                 'error' => true,
                 'message' => 'Failed to get teacher timetable WhatsApp'
+            ], 500);
+        }
+    }
+
+    /**
+     * Send teacher timetable via WhatsApp integration
+     * POST /api/v1/calendar/teacher/{id}/send-whatsapp
+     */
+    public function sendTeacherTimetableWhatsApp(int $id): JsonResponse
+    {
+        try {
+            $teacher = CalendarTeacher::findOrFail($id);
+            $timeTable = CalendarTeacherTimetable::where('teacher_id', $id)
+                ->where('status', 'active')
+                ->orderByRaw("FIELD(day, 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')")
+                ->orderBy('start_time')
+                ->get();
+
+            // Try to find the teacher in users table by name to get their WhatsApp
+            $user = User::where('user_type', UserType::Teacher)
+                ->where('name', 'LIKE', '%' . $teacher->name . '%')
+                ->orWhere('name', 'LIKE', $teacher->name . '%')
+                ->first();
+            
+            // Use user's WhatsApp if found, otherwise fall back to calendar_teachers whatsapp
+            $phoneNumber = $user && $user->whatsapp_number 
+                ? $user->whatsapp_number 
+                : $teacher->whatsapp;
+
+            if (!$phoneNumber) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Teacher does not have a WhatsApp number'
+                ], 400);
+            }
+
+            $groupedTimeTable = $timeTable->groupBy('day');
+
+            $daysOrder = [
+                'Sunday', 'Monday', 'Tuesday', 'Wednesday', 
+                'Thursday', 'Friday', 'Saturday',
+            ];
+
+            $groupedTimeTable = $groupedTimeTable->sortBy(function ($value, $key) use ($daysOrder) {
+                return array_search($key, $daysOrder);
+            });
+
+            // Build enhanced message
+            $message = "🎓 *Almajd Academy*\n";
+            $message .= "━━━━━━━━━━━━━━━━━━\n\n";
+            $message .= "📋 *" . $teacher->name . " - جدول الحصص*\n\n";
+
+            $daysInArabic = [
+                'Sunday' => 'الأحد',
+                'Monday' => 'الاثنين',
+                'Tuesday' => 'الثلاثاء',
+                'Wednesday' => 'الأربعاء',
+                'Thursday' => 'الخميس',
+                'Friday' => 'الجمعة',
+                'Saturday' => 'السبت',
+            ];
+
+            $totalLessons = 0;
+
+            foreach ($groupedTimeTable as $day => $entries) {
+                $dayInArabic = $daysInArabic[$day] ?? $day;
+                $message .= "*" . $dayInArabic . "*\n";
+                
+                foreach ($entries as $entry) {
+                    $startTime = Carbon::parse($entry->start_time)->format('h:i A');
+                    $endTime = $entry->finish_time 
+                        ? Carbon::parse($entry->finish_time)->format('h:i A')
+                        : '';
+                    $timeRange = $endTime ? "$startTime - $endTime" : $startTime;
+                    $country = $entry->country == 'uk' ? '🇬🇧' : '🇨🇦';
+                    $message .= "  • " . $entry->student_name . " $country [$timeRange]\n";
+                    $totalLessons++;
+                }
+                
+                $message .= "\n";
+            }
+
+            $message .= "━━━━━━━━━━━━━━━━━━\n";
+            $message .= "📊 *إجمالي الحصص:* " . $totalLessons . "\n\n";
+            $message .= "_جدول محدث بتاريخ " . Carbon::now()->format('Y-m-d') . "_\n\n";
+            $message .= "Thank you for choosing Almajd Academy! 🌟";
+
+            // Send message via WhatsApp integration
+            $result = $this->whatsAppService->sendMessage(
+                $phoneNumber,
+                $message
+            );
+
+            if ($result['success']) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'WhatsApp message sent successfully',
+                ]);
+            }
+
+            return response()->json([
+                'error' => true,
+                'message' => $result['message'] ?? 'Failed to send WhatsApp message'
+            ], 500);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Teacher not found'
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Error sending teacher timetable WhatsApp: ' . $e->getMessage());
+            return response()->json([
+                'error' => true,
+                'message' => 'Failed to send teacher timetable WhatsApp: ' . $e->getMessage()
             ], 500);
         }
     }
