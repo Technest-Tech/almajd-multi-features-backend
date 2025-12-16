@@ -14,7 +14,7 @@ class CalendarTeacher extends Model
 
     protected $fillable = [
         'name',
-        'whatsapp_number',
+        'whatsapp', // Database column is 'whatsapp', not 'whatsapp_number'
     ];
 
     /**

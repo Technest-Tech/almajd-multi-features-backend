@@ -48,7 +48,7 @@ class CalendarTeacherController extends Controller
         try {
             $request->validate([
                 'name' => 'required|string|max:255',
-                'whatsapp_number' => 'required|string|unique:calendar_teachers,whatsapp_number',
+                'whatsapp' => 'required|string|unique:calendar_teachers,whatsapp',
             ]);
 
             $teacher = CalendarTeacher::create($request->all());
@@ -105,7 +105,7 @@ class CalendarTeacherController extends Controller
 
             $request->validate([
                 'name' => 'sometimes|string|max:255',
-                'whatsapp_number' => 'sometimes|string|unique:calendar_teachers,whatsapp_number,' . $id,
+                'whatsapp' => 'sometimes|string|unique:calendar_teachers,whatsapp,' . $id,
             ]);
 
             $teacher->update($request->all());
