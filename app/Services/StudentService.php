@@ -50,7 +50,25 @@ class StudentService
         $data['user_type'] = UserType::Student;
         $data['password'] = bcrypt($data['password'] ?? 'password'); // Default password if not provided
         
+        // Generate random email if not provided
+        if (!isset($data['email']) || empty($data['email'])) {
+            $data['email'] = $this->generateRandomEmail();
+        }
+        
         return User::create($data);
+    }
+    
+    /**
+     * Generate a unique random email for a student
+     */
+    private function generateRandomEmail(): string
+    {
+        do {
+            $randomString = bin2hex(random_bytes(8));
+            $email = "student_{$randomString}@almajdacademy.local";
+        } while (User::where('email', $email)->exists());
+        
+        return $email;
     }
 
     public function update(User $student, array $data): User

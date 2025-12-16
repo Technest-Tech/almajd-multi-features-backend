@@ -21,13 +21,9 @@ class UpdateStudentRequest extends FormRequest
      */
     public function rules(): array
     {
-        $studentId = $this->route('student');
-        
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => ['sometimes', 'required', 'email', 'unique:users,email,' . $studentId],
-            'whatsapp_number' => ['nullable', 'string', 'max:20'],
-            'country' => ['nullable', 'string', 'size:2'],
+            'whatsapp_number' => ['nullable', 'string', 'max:255'],
             'currency' => ['nullable', 'in:USD,GBP,EUR,EGP,SAR,AED,CAD'],
             'hour_price' => ['nullable', 'numeric', 'min:0'],
         ];

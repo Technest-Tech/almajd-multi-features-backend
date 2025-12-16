@@ -23,9 +23,7 @@ class StoreStudentRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:users,email'],
-            'whatsapp_number' => ['nullable', 'string', 'max:20'],
-            'country' => ['nullable', 'string', 'size:2'],
+            'whatsapp_number' => ['nullable', 'string', 'max:255'],
             'currency' => ['nullable', 'in:USD,GBP,EUR,EGP,SAR,AED,CAD'],
             'hour_price' => ['nullable', 'numeric', 'min:0'],
         ];
