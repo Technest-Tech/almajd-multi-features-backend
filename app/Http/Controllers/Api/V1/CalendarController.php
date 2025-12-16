@@ -7,6 +7,8 @@ use App\Models\CalendarExceptionalClass;
 use App\Models\CalendarStudentStop;
 use App\Models\CalendarTeacher;
 use App\Models\CalendarTeacherTimetable;
+use App\Models\User;
+use App\Enums\UserType;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -599,9 +601,20 @@ class CalendarController extends Controller
 
             $report = urlencode($report);
 
+            // Try to find the teacher in users table by name to get their WhatsApp
+            $user = User::where('user_type', UserType::Teacher)
+                ->where('name', 'LIKE', '%' . $teacher->name . '%')
+                ->orWhere('name', 'LIKE', $teacher->name . '%')
+                ->first();
+            
+            // Use user's WhatsApp if found, otherwise fall back to calendar_teachers whatsapp_number
+            $phoneNumber = $user && $user->whatsapp_number 
+                ? $user->whatsapp_number 
+                : $teacher->whatsapp_number;
+
             return response()->json([
                 'report' => $report,
-                'phoneNumber' => $teacher->whatsapp_number
+                'phoneNumber' => $phoneNumber
             ], 200, [
                 'Content-Type' => 'application/json; charset=utf-8'
             ]);

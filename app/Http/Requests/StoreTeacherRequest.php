@@ -28,7 +28,7 @@ class StoreTeacherRequest extends FormRequest
             'hour_price' => ['nullable', 'numeric', 'min:0'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'account_number' => ['nullable', 'string', 'max:255'],
-            'whatsapp_number' => ['nullable', 'string', 'max:20'],
+            'whatsapp_number' => ['nullable', 'string', 'max:255'],
             'student_ids' => ['nullable', 'array'],
             'student_ids.*' => ['exists:users,id'],
         ];
