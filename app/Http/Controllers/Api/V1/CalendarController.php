@@ -62,10 +62,8 @@ class CalendarController extends Controller
             }
 
             // Filter by date range (for exceptional classes)
-            if ($request->has('from_date') && $request->has('to_date')) {
-                // This is mainly for exceptional classes
-                // Regular timetable entries are recurring by day
-            }
+            $fromDate = $request->has('from_date') ? $request->input('from_date') : null;
+            $toDate = $request->has('to_date') ? $request->input('to_date') : null;
 
             $today = date('Y-m-d');
             $timetables = $query->where(function ($q) use ($today) {
@@ -94,6 +92,7 @@ class CalendarController extends Controller
                             'teacherId' => $timetable->teacher_id ?? 0,
                             'teacherName' => ($teacher && isset($teacher->name)) ? $teacher->name : '',
                             'day' => $day,
+                            'type' => 'recurring',
                         ],
                     ];
                 } catch (\Exception $e) {
@@ -101,9 +100,67 @@ class CalendarController extends Controller
                     Log::error('Timetable ID: ' . ($timetable->id ?? 'unknown'));
                     return null;
                 }
-            })->filter()->values();
+            })->filter();
 
-            return response()->json(['events' => $events], 200, [
+            // Fetch exceptional classes
+            $exceptionalQuery = CalendarExceptionalClass::with(['teacher' => function ($q) {
+                $q->select('id', 'name');
+            }]);
+
+            // Filter exceptional classes by teacher if provided
+            if ($request->has('teacher_id')) {
+                $exceptionalQuery->where('teacher_id', $request->teacher_id);
+            }
+
+            // Filter by date range if provided
+            if ($fromDate && $toDate) {
+                $exceptionalQuery->whereBetween('date', [$fromDate, $toDate]);
+            } elseif ($fromDate) {
+                $exceptionalQuery->where('date', '>=', $fromDate);
+            } elseif ($toDate) {
+                $exceptionalQuery->where('date', '<=', $toDate);
+            }
+
+            $exceptionalClasses = $exceptionalQuery->orderBy('date')
+                ->orderBy('time')
+                ->get();
+
+            // Transform exceptional classes to events format
+            $exceptionalEvents = $exceptionalClasses->map(function ($exceptionalClass) {
+                try {
+                    $date = Carbon::parse($exceptionalClass->date);
+                    $dayOfWeek = $date->dayOfWeek; // 0 = Sunday, 6 = Saturday
+                    $teacher = $exceptionalClass->teacher;
+                    
+                    return [
+                        'id' => 'exceptional_' . $exceptionalClass->id, // Prefix to avoid conflicts
+                        'title' => $exceptionalClass->student_name ?? '',
+                        'daysOfWeek' => [$dayOfWeek],
+                        'startTime' => $exceptionalClass->time ?? '00:00:00',
+                        'endTime' => null,
+                        'start' => $exceptionalClass->date->format('Y-m-d'), // Add start date for one-time events
+                        'extendedProps' => [
+                            'studentName' => $exceptionalClass->student_name ?? '',
+                            'country' => 'canada', // Default, can be updated if needed
+                            'teacherId' => $exceptionalClass->teacher_id ?? 0,
+                            'teacherName' => ($teacher && isset($teacher->name)) ? $teacher->name : '',
+                            'day' => $date->format('l'), // Day name
+                            'type' => 'exceptional',
+                            'exceptionalClassId' => $exceptionalClass->id,
+                            'date' => $exceptionalClass->date->format('Y-m-d'),
+                        ],
+                    ];
+                } catch (\Exception $e) {
+                    Log::error('Error mapping exceptional class to event: ' . $e->getMessage());
+                    Log::error('Exceptional Class ID: ' . ($exceptionalClass->id ?? 'unknown'));
+                    return null;
+                }
+            })->filter();
+
+            // Merge both event types
+            $allEvents = $events->merge($exceptionalEvents)->values();
+
+            return response()->json(['events' => $allEvents], 200, [
                 'Content-Type' => 'application/json; charset=utf-8'
             ]);
         } catch (ValidationException $e) {
