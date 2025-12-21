@@ -112,13 +112,18 @@ class CalendarController extends Controller
                 $exceptionalQuery->where('teacher_id', $request->teacher_id);
             }
 
-            // Filter by date range if provided
+            // Filter by date range if provided, otherwise use default range (past 30 days to future 365 days)
             if ($fromDate && $toDate) {
                 $exceptionalQuery->whereBetween('date', [$fromDate, $toDate]);
             } elseif ($fromDate) {
                 $exceptionalQuery->where('date', '>=', $fromDate);
             } elseif ($toDate) {
                 $exceptionalQuery->where('date', '<=', $toDate);
+            } else {
+                // Default: include exceptional classes from past 30 days to future 365 days
+                $defaultFromDate = Carbon::now()->subDays(30)->format('Y-m-d');
+                $defaultToDate = Carbon::now()->addDays(365)->format('Y-m-d');
+                $exceptionalQuery->whereBetween('date', [$defaultFromDate, $defaultToDate]);
             }
 
             $exceptionalClasses = $exceptionalQuery->orderBy('date')
