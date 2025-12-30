@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class TimetableController extends Controller
 {
@@ -617,6 +618,10 @@ class TimetableController extends Controller
     public function sendWhatsAppReminder(Request $request, WhatsAppService $whatsAppService): JsonResponse
     {
         try {
+            // Increase execution time and memory limits for large datasets
+            set_time_limit(600); // 10 minutes
+            ini_set('memory_limit', '512M');
+            
             $validated = $request->validate([
                 'date' => 'required|date',
                 'from_time' => 'required|date_format:H:i',
@@ -641,7 +646,8 @@ class TimetableController extends Controller
             $fromTime = Carbon::parse($validated['from_time']);
             $toTime = Carbon::parse($validated['to_time']);
 
-            // Query events for the date and time range
+            // Query events for the date and time range - use chunking if needed for very large datasets
+            // But collect all into memory to ensure we process everything
             $events = TimetableEvent::with(['timetable.student', 'teacher'])
                 ->whereDate('event_date', $date->format('Y-m-d'))
                 ->whereTime('start_time', '>=', $fromTime->format('H:i:s'))
@@ -660,30 +666,38 @@ class TimetableController extends Controller
             // Group events by time (30-minute intervals) and then by teacher
             $groupedEvents = [];
             foreach ($events as $event) {
-                $time = Carbon::parse($event->start_time);
-                // Round to nearest 30 minutes
-                $minutes = $time->minute;
-                $roundedMinutes = round($minutes / 30) * 30;
-                $time->minute($roundedMinutes);
-                $time->second(0);
-                
-                $timeKey = $time->format('H:i');
-                $teacherName = $event->teacher->name ?? 'Unknown Teacher';
-                $studentName = $event->timetable->student->name ?? 'Unknown Student';
-                
-                if (!isset($groupedEvents[$timeKey])) {
-                    $groupedEvents[$timeKey] = [];
+                try {
+                    $time = Carbon::parse($event->start_time);
+                    // Round to nearest 30 minutes
+                    $minutes = $time->minute;
+                    $roundedMinutes = round($minutes / 30) * 30;
+                    $time->minute($roundedMinutes);
+                    $time->second(0);
+                    
+                    $timeKey = $time->format('H:i');
+                    $teacherName = $event->teacher->name ?? 'Unknown Teacher';
+                    $studentName = $event->timetable->student->name ?? 'Unknown Student';
+                    
+                    if (!isset($groupedEvents[$timeKey])) {
+                        $groupedEvents[$timeKey] = [];
+                    }
+                    
+                    if (!isset($groupedEvents[$timeKey][$teacherName])) {
+                        $groupedEvents[$timeKey][$teacherName] = [];
+                    }
+                    
+                    $groupedEvents[$timeKey][$teacherName][] = $studentName;
+                } catch (\Exception $e) {
+                    // Log error but continue processing other events
+                    Log::warning('Error processing event: ' . $e->getMessage(), [
+                        'event_id' => $event->id ?? 'unknown'
+                    ]);
+                    continue;
                 }
-                
-                if (!isset($groupedEvents[$timeKey][$teacherName])) {
-                    $groupedEvents[$timeKey][$teacherName] = [];
-                }
-                
-                $groupedEvents[$timeKey][$teacherName][] = $studentName;
             }
 
             // Format message with modern and professional design
-            $formattedDate = $date->format('l, F j, Y'); // e.g., "Monday, December 1, 2025"
+            $formattedDate = $date->format('l, F j, Y');
             
             // Header
             $message = "📅 *Daily Schedule Report*\n";
@@ -698,38 +712,47 @@ class TimetableController extends Controller
             $totalEvents = $events->count();
             $message .= "📋 *Total Sessions: {$totalEvents}*\n\n";
 
+            // Process all time slots - ensure we don't stop early
             foreach ($timeSlots as $index => $timeSlot) {
-                // Format time in 12-hour format with AM/PM
-                $timeParts = explode(':', $timeSlot);
-                $hour = (int)$timeParts[0];
-                $minute = $timeParts[1];
-                $timeCarbon = Carbon::createFromTime($hour, $minute);
-                $formattedTime = $timeCarbon->format('g:i A'); // e.g., "9:00 AM"
-                
-                // Time slot header
-                $message .= "🕐 *{$formattedTime}*\n";
-                $message .= "─────────────────────\n";
-                
-                $teachers = $groupedEvents[$timeSlot];
-                $teacherNames = array_keys($teachers);
-                
-                foreach ($teacherNames as $teacherIndex => $teacherName) {
-                    // Teacher section
-                    $message .= "\n👨‍🏫 *{$teacherName}*\n";
+                try {
+                    // Format time in 12-hour format with AM/PM
+                    $timeParts = explode(':', $timeSlot);
+                    $hour = (int)$timeParts[0];
+                    $minute = $timeParts[1];
+                    $timeCarbon = Carbon::createFromTime($hour, $minute);
+                    $formattedTime = $timeCarbon->format('g:i A');
                     
-                    $students = $teachers[$teacherName];
+                    // Time slot header
+                    $message .= "🕐 *{$formattedTime}*\n";
+                    $message .= "─────────────────────\n";
                     
-                    // Students list
-                    if (count($students) === 1) {
-                        $message .= "   👤 {$students[0]}\n";
-                    } else {
-                        $message .= "   👥 " . implode("\n   👥 ", $students) . "\n";
+                    $teachers = $groupedEvents[$timeSlot];
+                    $teacherNames = array_keys($teachers);
+                    
+                    foreach ($teacherNames as $teacherIndex => $teacherName) {
+                        // Teacher section
+                        $message .= "\n👨‍🏫 *{$teacherName}*\n";
+                        
+                        $students = $teachers[$teacherName];
+                        
+                        // Students list
+                        if (count($students) === 1) {
+                            $message .= "   👤 {$students[0]}\n";
+                        } else {
+                            $message .= "   👥 " . implode("\n   👥 ", $students) . "\n";
+                        }
                     }
-                }
-                
-                // Add separator between time groups (except for last one)
-                if ($index < count($timeSlots) - 1) {
-                    $message .= "\n━━━━━━━━━━━━━━━━━━━━\n\n";
+                    
+                    // Add separator between time groups (except for last one)
+                    if ($index < count($timeSlots) - 1) {
+                        $message .= "\n━━━━━━━━━━━━━━━━━━━━\n\n";
+                    }
+                } catch (\Exception $e) {
+                    // Log error but continue processing
+                    Log::warning('Error processing time slot: ' . $e->getMessage(), [
+                        'time_slot' => $timeSlot
+                    ]);
+                    continue;
                 }
             }
             
@@ -738,6 +761,15 @@ class TimetableController extends Controller
             $message .= "✅ *Report Generated Successfully*\n";
             $message .= "📱 Almajd Academy";
 
+            // Log message length for debugging
+            Log::info('WhatsApp reminder message generated', [
+                'date' => $date->format('Y-m-d'),
+                'time_range' => $fromTime->format('H:i') . ' - ' . $toTime->format('H:i'),
+                'total_events' => $totalEvents,
+                'message_length' => mb_strlen($message),
+                'time_slots_count' => count($timeSlots)
+            ]);
+
             // Send via WhatsApp
             $result = $whatsAppService->sendMessage($phone, $message);
 
@@ -745,7 +777,8 @@ class TimetableController extends Controller
                 return $this->jsonResponse([
                     'success' => true,
                     'message' => 'WhatsApp reminder sent successfully!',
-                    'events_count' => $events->count()
+                    'events_count' => $events->count(),
+                    'message_length' => mb_strlen($message)
                 ]);
             } else {
                 return $this->jsonResponse([
@@ -760,6 +793,11 @@ class TimetableController extends Controller
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
+            Log::error('WhatsApp reminder error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return $this->jsonResponse([
                 'success' => false,
                 'message' => 'Failed to send WhatsApp reminder: ' . $e->getMessage()

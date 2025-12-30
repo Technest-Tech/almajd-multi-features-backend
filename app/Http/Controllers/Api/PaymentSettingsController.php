@@ -65,8 +65,8 @@ class PaymentSettingsController extends Controller
      */
     public function getLessonSettings(): JsonResponse
     {
-        $teachersCanEditLessons = PaymentSettings::getSetting('teachers_can_edit_lessons', '1');
-        $teachersCanDeleteLessons = PaymentSettings::getSetting('teachers_can_delete_lessons', '1');
+        $teachersCanEditLessons = PaymentSettings::getSetting('teachers_can_edit_lessons', '0');
+        $teachersCanDeleteLessons = PaymentSettings::getSetting('teachers_can_delete_lessons', '0');
         $teachersCanAddPastLessons = PaymentSettings::getSetting('teachers_can_add_past_lessons', '0');
 
         return response()->json([
@@ -116,8 +116,8 @@ class PaymentSettingsController extends Controller
         return response()->json([
             'message' => 'Lesson settings updated successfully',
             'data' => [
-                'teachers_can_edit_lessons' => PaymentSettings::getSetting('teachers_can_edit_lessons', '1') === '1',
-                'teachers_can_delete_lessons' => PaymentSettings::getSetting('teachers_can_delete_lessons', '1') === '1',
+                'teachers_can_edit_lessons' => PaymentSettings::getSetting('teachers_can_edit_lessons', '0') === '1',
+                'teachers_can_delete_lessons' => PaymentSettings::getSetting('teachers_can_delete_lessons', '0') === '1',
                 'teachers_can_add_past_lessons' => PaymentSettings::getSetting('teachers_can_add_past_lessons', '0') === '1',
             ],
         ]);
