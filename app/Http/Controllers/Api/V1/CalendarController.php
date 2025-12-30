@@ -641,7 +641,11 @@ class CalendarController extends Controller
                 return array_search($key, $daysOrder);
             });
 
-            $report = $teacher->name . "%0a";
+            // Build enhanced message similar to reminder messages
+            $message = "📅 *Teacher Timetable*\n";
+            $message .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+            $message .= "👨‍🏫 *Teacher:* {$teacher->name}\n";
+            $message .= "━━━━━━━━━━━━━━━━━━━━\n\n";
 
             $daysInArabic = [
                 'Sunday' => 'الأحد',
@@ -653,22 +657,40 @@ class CalendarController extends Controller
                 'Saturday' => 'السبت',
             ];
 
+            $totalLessons = 0;
+
             foreach ($groupedTimeTable as $day => $entries) {
-                $dayInArabic = $daysInArabic[$day];
-                $dayEntries = [];
+                $dayInArabic = $daysInArabic[$day] ?? $day;
+                
+                // Day header
+                $message .= "📆 *{$dayInArabic}*\n";
+                $message .= "─────────────────────\n";
+                
                 foreach ($entries as $entry) {
-                    $startTime = Carbon::parse($entry->start_time)->format('h:i A');
+                    $startTime = Carbon::parse($entry->start_time)->format('g:i A');
                     $endTime = $entry->finish_time 
-                        ? Carbon::parse($entry->finish_time)->format('h:i A')
+                        ? Carbon::parse($entry->finish_time)->format('g:i A')
                         : '';
                     $timeRange = $endTime ? "$startTime - $endTime" : $startTime;
-                    $dayEntries[] = $entry->student_name . " [" . $timeRange . "]";
+                    $country = $entry->country == 'uk' ? '🇬🇧' : '🇨🇦';
+                    $message .= "   👤 {$entry->student_name} $country [$timeRange]\n";
+                    $totalLessons++;
                 }
-                $report .= $dayInArabic . ":" . implode(",", $dayEntries) . ",%0a";
-                $report .= "-----------------------------%0a";
+                
+                // Add separator between days (except for last one)
+                if ($day !== $groupedTimeTable->keys()->last()) {
+                    $message .= "\n━━━━━━━━━━━━━━━━━━━━\n\n";
+                }
             }
 
-            $report = urlencode($report);
+            // Footer
+            $message .= "\n━━━━━━━━━━━━━━━━━━━━\n";
+            $message .= "📋 *Total Sessions: {$totalLessons}*\n\n";
+            $message .= "✅ *Timetable Generated Successfully*\n";
+            $message .= "📱 Almajd Academy";
+
+            // URL encode the message
+            $report = urlencode($message);
 
             // Try to find the teacher in users table by name to get their WhatsApp
             $user = User::where('user_type', UserType::Teacher)
@@ -676,10 +698,10 @@ class CalendarController extends Controller
                 ->orWhere('name', 'LIKE', $teacher->name . '%')
                 ->first();
             
-            // Use user's WhatsApp if found, otherwise fall back to calendar_teachers whatsapp_number
+            // Use user's WhatsApp if found, otherwise fall back to calendar_teachers whatsapp
             $phoneNumber = $user && $user->whatsapp_number 
                 ? $user->whatsapp_number 
-                : $teacher->whatsapp_number;
+                : $teacher->whatsapp;
 
             return response()->json([
                 'report' => $report,
