@@ -20,29 +20,39 @@ class SalaryService
      */
     public function getTeacherSalaries(int $year, int $month, ?float $unifiedHourPrice = null): array
     {
-        // Get all teachers with hour_price
-        $teachersQuery = User::where('user_type', UserType::Teacher);
-        
-        if ($unifiedHourPrice !== null) {
-            // Include teachers without hour_price when unified price is provided
-            $teachersQuery->where(function ($query) {
-                $query->whereNotNull('hour_price')
-                      ->orWhereNull('hour_price');
-            });
-        } else {
-            // Only get teachers with hour_price
-            $teachersQuery->whereNotNull('hour_price');
-        }
-        
-        $teachers = $teachersQuery->get();
+        // Get all teachers who have lessons in the specified month/year
+        // This ensures we don't miss any teachers with lessons, even if they don't have hour_price
+        $teacherIdsWithLessons = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
+            ->join('users', 'courses.teacher_id', '=', 'users.id')
+            ->where('users.user_type', UserType::Teacher)
+            ->whereYear('lessons.date', $year)
+            ->whereMonth('lessons.date', $month)
+            ->whereNotNull('lessons.duration')
+            ->distinct()
+            ->pluck('users.id')
+            ->toArray();
 
         // Debug logging
         Log::info("SalaryService Debug", [
             'year' => $year,
             'month' => $month,
-            'teachers_count' => $teachers->count(),
+            'teacher_ids_with_lessons' => $teacherIdsWithLessons,
             'unified_hour_price' => $unifiedHourPrice,
         ]);
+
+        if (empty($teacherIdsWithLessons)) {
+            return [
+                'year' => $year,
+                'month' => $month,
+                'salaries' => [],
+                'totals_by_currency' => (object)[],
+            ];
+        }
+
+        // Get all teachers who have lessons
+        $teachers = User::whereIn('id', $teacherIdsWithLessons)
+            ->where('user_type', UserType::Teacher)
+            ->get();
 
         $salaries = [];
         $totalsByCurrency = []; // Associative array (will be encoded as object in JSON)
@@ -57,7 +67,7 @@ class SalaryService
                 ->whereNotNull('lessons.duration')
                 ->sum('lessons.duration');
 
-            // Skip if no lessons found
+            // Skip if no lessons found (shouldn't happen, but safety check)
             if ($totalMinutes === null || $totalMinutes == 0) {
                 Log::debug("Teacher {$teacher->id} ({$teacher->name}) has no lessons for {$year}-{$month}");
                 continue;
