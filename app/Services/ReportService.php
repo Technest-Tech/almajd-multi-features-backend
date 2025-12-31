@@ -153,7 +153,7 @@ class ReportService
      */
     public function getStudent(int $studentId): ?User
     {
-        return User::find($studentId);
+        return User::where('user_type', \App\Enums\UserType::Student)->find($studentId);
     }
 
     /**

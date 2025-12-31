@@ -147,7 +147,12 @@
     <div class="cost-summary">
         <h3>إجمالي التكلفة</h3>
         <div class="total-cost">
-            {{ number_format($totalCost, 2) }} {{ $student->currency?->symbol() ?? '' }}
+            {{ number_format($totalCost, 2) }} 
+            @if($student->currency)
+                {{ is_object($student->currency) && method_exists($student->currency, 'symbol') ? $student->currency->symbol() : $student->currency }}
+            @else
+                {{ 'EGP' }}
+            @endif
         </div>
     </div>
 
@@ -171,7 +176,17 @@
                     <td>{{ $lesson->duration ?? 0 }}</td>
                     <td>{{ \Carbon\Carbon::parse($lesson->date)->format('Y-m-d') }}</td>
                     <td>{{ number_format($lessonCost, 2) }}</td>
-                    <td>{{ $student->currency?->symbol() ?? ($lesson->course?->student?->currency?->symbol() ?? 'N/A') }}</td>
+                    <td>
+                        @php
+                            $currency = $student->currency ?? ($lesson->course?->student?->currency ?? null);
+                            if ($currency) {
+                                $currencySymbol = is_object($currency) && method_exists($currency, 'symbol') ? $currency->symbol() : $currency;
+                                echo $currencySymbol;
+                            } else {
+                                echo 'EGP';
+                            }
+                        @endphp
+                    </td>
                 </tr>
             @empty
                 <tr>
@@ -188,7 +203,9 @@
             Almajd Manager: Ibrahim Mohamed
         </div>
         <div class="signature-image">
-            <img src="{{ public_path('ketm3.png') }}" alt="Signature">
+            @if(file_exists(public_path('ketm3.png')))
+                <img src="{{ public_path('ketm3.png') }}" alt="Signature">
+            @endif
         </div>
     </div>
 </body>

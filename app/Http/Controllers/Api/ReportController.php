@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Spatie\LaravelPdf\Facades\Pdf;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 class ReportController extends Controller
 {
@@ -44,8 +45,17 @@ class ReportController extends Controller
             $toDate = $request->input('to_date');
 
             $student = $this->reportService->getStudent($studentId);
+            
+            if (!$student) {
+                return response()->json(['error' => 'Student not found or is not a student type'], 404);
+            }
+
             $lessons = $this->reportService->getStudentLessons($studentId, $fromDate, $toDate);
             $totalCost = $this->reportService->calculateTotalCost($lessons);
+
+            // Sanitize filename to avoid issues with special characters
+            $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $student->name);
+            $filename = 'student-report-' . $sanitizedName . '.pdf';
 
             $pdf = Pdf::view('reports.student_report', [
                 'student' => $student,
@@ -56,7 +66,7 @@ class ReportController extends Controller
                 'reportService' => $this->reportService,
             ])
             ->format('a4')
-            ->name('student-report-' . $student->name . '.pdf')
+            ->name($filename)
             ->withBrowsershot(function ($browsershot) {
                 $browsershot
                     ->margins(10, 10, 10, 10, 'mm')
@@ -67,6 +77,12 @@ class ReportController extends Controller
 
             return $pdf->download();
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Report generation error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'student_id' => $request->input('student_id'),
+                'from_date' => $request->input('from_date'),
+                'to_date' => $request->input('to_date'),
+            ]);
             return response()->json(['error' => 'Failed to generate report: ' . $e->getMessage()], 500);
         }
     }
