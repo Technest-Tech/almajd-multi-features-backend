@@ -20,6 +20,13 @@ class LessonController extends Controller
     public function index(Request $request): JsonResponse
     {
         $filters = $request->only(['course_id', 'year', 'month', 'status', 'per_page']);
+        
+        // If logged-in user is a teacher, filter lessons by their courses
+        if ($request->user() && $request->user()->isTeacher()) {
+            $teacherId = $request->user()->id;
+            $filters['teacher_id'] = $teacherId;
+        }
+        
         $lessons = $this->lessonService->getAll($filters);
 
         return response()->json($lessons);

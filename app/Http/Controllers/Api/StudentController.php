@@ -20,6 +20,27 @@ class StudentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $filters = $request->only(['search', 'country', 'currency', 'sort_by', 'sort_order', 'per_page']);
+        
+        // If logged-in user is a teacher, filter by assigned students
+        if ($request->user() && $request->user()->isTeacher()) {
+            $teacher = $request->user();
+            $assignedStudentIds = $teacher->assignedStudents()->pluck('users.id')->toArray();
+            
+            // If teacher has no assigned students, return empty result
+            if (empty($assignedStudentIds)) {
+                return response()->json([
+                    'data' => [],
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => $filters['per_page'] ?? 15,
+                    'total' => 0,
+                ]);
+            }
+            
+            // Add filter to only show assigned students
+            $filters['assigned_student_ids'] = $assignedStudentIds;
+        }
+        
         $students = $this->studentService->getAll($filters);
 
         return response()->json($students);

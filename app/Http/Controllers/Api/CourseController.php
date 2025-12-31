@@ -19,6 +19,12 @@ class CourseController extends Controller
     public function index(Request $request): JsonResponse
     {
         $filters = $request->only(['student_id', 'teacher_id', 'search', 'per_page']);
+        
+        // If logged-in user is a teacher, automatically filter by their ID
+        if ($request->user() && $request->user()->isTeacher()) {
+            $filters['teacher_id'] = $request->user()->id;
+        }
+        
         $courses = $this->courseService->getAll($filters);
 
         return response()->json($courses);

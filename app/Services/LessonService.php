@@ -17,6 +17,13 @@ class LessonService
     {
         $query = Lesson::with(['course.student', 'course.teacher', 'createdBy']);
 
+        // Filter by teacher (if teacher_id is provided)
+        if (isset($filters['teacher_id'])) {
+            $query->whereHas('course', function ($q) use ($filters) {
+                $q->where('teacher_id', $filters['teacher_id']);
+            });
+        }
+
         // Filter by course
         if (isset($filters['course_id'])) {
             $query->where('course_id', $filters['course_id']);

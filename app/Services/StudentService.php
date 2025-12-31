@@ -13,6 +13,11 @@ class StudentService
     {
         $query = User::where('user_type', UserType::Student);
 
+        // Filter by assigned student IDs (for teachers)
+        if (isset($filters['assigned_student_ids']) && is_array($filters['assigned_student_ids'])) {
+            $query->whereIn('id', $filters['assigned_student_ids']);
+        }
+
         // Search by name or email
         if (isset($filters['search'])) {
             $search = $filters['search'];
