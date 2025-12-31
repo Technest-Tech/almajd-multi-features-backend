@@ -69,6 +69,7 @@ class ReportController extends Controller
             ->name($filename)
             ->withBrowsershot(function ($browsershot) {
                 $browsershot
+                    ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
                     ->margins(10, 10, 10, 10, 'mm')
                     ->showBackground()
                     ->waitUntilNetworkIdle()
@@ -124,6 +125,7 @@ class ReportController extends Controller
             ->name('multi-student-report.pdf')
             ->withBrowsershot(function ($browsershot) {
                 $browsershot
+                    ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
                     ->margins(10, 10, 10, 10, 'mm')
                     ->showBackground()
                     ->waitUntilNetworkIdle()
@@ -164,6 +166,7 @@ class ReportController extends Controller
             ->name('academy-statistics-report.pdf')
             ->withBrowsershot(function ($browsershot) {
                 $browsershot
+                    ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
                     ->margins(10, 10, 10, 10, 'mm')
                     ->showBackground()
                     ->waitUntilNetworkIdle()
