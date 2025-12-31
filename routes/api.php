@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\TimetableController;
 use App\Http\Controllers\Api\V1\CalendarController;
 use App\Http\Controllers\Api\V1\CalendarTeacherController;
 use App\Http\Controllers\Api\V1\CalendarStudentStopController;
+use App\Http\Controllers\Api\StudentCountriesController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -45,6 +46,10 @@ Route::get('/calender-teachers/{id}', [CalendarTeacherController::class, 'show']
 
 // Public Calendar Student Stops routes
 Route::apiResource('calendar-student-stops', CalendarStudentStopController::class);
+
+// Public Student Countries routes (no auth required)
+Route::get('/student-countries/plus/{country}', [StudentCountriesController::class, 'plus']);
+Route::get('/student-countries/minus/{country}', [StudentCountriesController::class, 'minus']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
