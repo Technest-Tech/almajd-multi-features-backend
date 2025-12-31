@@ -6,6 +6,7 @@ use App\Enums\UserType;
 use App\Models\Lesson;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SalaryService
 {
@@ -35,25 +36,34 @@ class SalaryService
         
         $teachers = $teachersQuery->get();
 
+        // Debug logging
+        Log::info("SalaryService Debug", [
+            'year' => $year,
+            'month' => $month,
+            'teachers_count' => $teachers->count(),
+            'unified_hour_price' => $unifiedHourPrice,
+        ]);
+
         $salaries = [];
         $totalsByCurrency = []; // Associative array (will be encoded as object in JSON)
 
         foreach ($teachers as $teacher) {
-            // Get lessons for this teacher in the specified month/year
+            // Get lessons for this teacher in the specified month/year using join for better performance
             // All lessons are 'present' by default, so no status filter needed
-            $lessons = Lesson::whereHas('course', function ($query) use ($teacher) {
-                $query->where('teacher_id', $teacher->id);
-            })
-            ->whereYear('date', $year)
-            ->whereMonth('date', $month)
-            ->get();
+            $totalMinutes = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
+                ->where('courses.teacher_id', $teacher->id)
+                ->whereYear('lessons.date', $year)
+                ->whereMonth('lessons.date', $month)
+                ->whereNotNull('lessons.duration')
+                ->sum('lessons.duration');
 
-            if ($lessons->isEmpty()) {
+            // Skip if no lessons found
+            if ($totalMinutes === null || $totalMinutes == 0) {
+                Log::debug("Teacher {$teacher->id} ({$teacher->name}) has no lessons for {$year}-{$month}");
                 continue;
             }
 
             // Calculate total hours (duration is in minutes, convert to hours)
-            $totalMinutes = $lessons->sum('duration');
             $totalHours = $totalMinutes / 60;
 
             // Determine hour price: use teacher's price if available, otherwise use unified price
@@ -61,8 +71,16 @@ class SalaryService
             
             // Skip if no hour price available
             if ($hourPrice === null) {
+                Log::debug("Teacher {$teacher->id} ({$teacher->name}) has no hour_price and no unified price provided");
                 continue;
             }
+            
+            // Get lesson count for reporting
+            $lessonsCount = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
+                ->where('courses.teacher_id', $teacher->id)
+                ->whereYear('lessons.date', $year)
+                ->whereMonth('lessons.date', $month)
+                ->count();
 
             // Calculate salary: total_hours * hour_price
             $salary = $totalHours * (float) $hourPrice;
@@ -77,7 +95,7 @@ class SalaryService
                 'currency' => $currency,
                 'total_hours' => round($totalHours, 2),
                 'salary' => round($salary, 2),
-                'lessons_count' => $lessons->count(),
+                'lessons_count' => $lessonsCount,
                 'hour_price' => (float) $hourPrice,
             ];
 
