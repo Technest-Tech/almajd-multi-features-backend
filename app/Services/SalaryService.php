@@ -36,7 +36,7 @@ class SalaryService
         $teachers = $teachersQuery->get();
 
         $salaries = [];
-        $totalsByCurrency = [];
+        $totalsByCurrency = []; // Associative array (will be encoded as object in JSON)
 
         foreach ($teachers as $teacher) {
             // Get lessons for this teacher in the specified month/year
@@ -91,6 +91,11 @@ class SalaryService
         // Round totals
         foreach ($totalsByCurrency as $currency => $total) {
             $totalsByCurrency[$currency] = round($total, 2);
+        }
+        
+        // If empty, convert to object to ensure JSON encodes as {} not []
+        if (empty($totalsByCurrency)) {
+            $totalsByCurrency = (object)[];
         }
 
         return [
