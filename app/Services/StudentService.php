@@ -37,7 +37,11 @@ class StudentService
         $sortOrder = $filters['sort_order'] ?? 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
-        return $query->paginate($filters['per_page'] ?? 15);
+        // Allow higher per_page for dropdowns (up to 5000)
+        $perPage = $filters['per_page'] ?? 15;
+        $perPage = min($perPage, 5000); // Cap at 5000 to prevent memory issues
+        
+        return $query->paginate($perPage);
     }
 
     public function getById(int $id): ?User
