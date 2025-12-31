@@ -22,30 +22,32 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/client-credentials', [ClientCredentialsController::class, 'getCredentials']);
 
-// Public Calendar routes (no auth required)
-Route::get('/calendar/events', [CalendarController::class, 'getEvents']);
-Route::get('/calendar/reminders/daily', [CalendarController::class, 'generateDailyReminder']);
-Route::get('/calendar/reminders/exceptional', [CalendarController::class, 'getExceptionalReminders']);
-Route::post('/calendar/teacher-timetable', [CalendarController::class, 'storeTeacherTimetable']);
-Route::put('/calendar/teacher-timetable/{id}', [CalendarController::class, 'updateTeacherTimetable']);
-Route::delete('/calendar/teacher-timetable/{id}', [CalendarController::class, 'deleteTeacherTimetable']);
-Route::post('/calendar/exceptional-class', [CalendarController::class, 'storeExceptionalClass']);
-Route::delete('/calendar/exceptional-class/{id}', [CalendarController::class, 'deleteExceptionalClass']);
-Route::get('/calendar/exceptional-classes/student', [CalendarController::class, 'getStudentExceptionalClasses']);
-Route::get('/calendar/teacher/{id}/whatsapp', [CalendarController::class, 'getTeacherTimetableWhatsApp']);
-Route::post('/calendar/teacher/{id}/send-whatsapp', [CalendarController::class, 'sendTeacherTimetableWhatsApp']);
-Route::get('/calendar/teacher/{id}/students', [CalendarController::class, 'getTeacherStudents']);
-Route::put('/calendar/student/status', [CalendarController::class, 'updateStudentStatus']);
-Route::get('/calendar/students/list', [CalendarController::class, 'getStudentsList']);
+// Calendar routes - require authentication and allow calendar_viewer, admin, teacher, student
+Route::middleware(['auth:sanctum', 'restrict.user.type:calendar_viewer,admin,teacher,student'])->group(function () {
+    Route::get('/calendar/events', [CalendarController::class, 'getEvents']);
+    Route::get('/calendar/reminders/daily', [CalendarController::class, 'generateDailyReminder']);
+    Route::get('/calendar/reminders/exceptional', [CalendarController::class, 'getExceptionalReminders']);
+    Route::post('/calendar/teacher-timetable', [CalendarController::class, 'storeTeacherTimetable']);
+    Route::put('/calendar/teacher-timetable/{id}', [CalendarController::class, 'updateTeacherTimetable']);
+    Route::delete('/calendar/teacher-timetable/{id}', [CalendarController::class, 'deleteTeacherTimetable']);
+    Route::post('/calendar/exceptional-class', [CalendarController::class, 'storeExceptionalClass']);
+    Route::delete('/calendar/exceptional-class/{id}', [CalendarController::class, 'deleteExceptionalClass']);
+    Route::get('/calendar/exceptional-classes/student', [CalendarController::class, 'getStudentExceptionalClasses']);
+    Route::get('/calendar/teacher/{id}/whatsapp', [CalendarController::class, 'getTeacherTimetableWhatsApp']);
+    Route::post('/calendar/teacher/{id}/send-whatsapp', [CalendarController::class, 'sendTeacherTimetableWhatsApp']);
+    Route::get('/calendar/teacher/{id}/students', [CalendarController::class, 'getTeacherStudents']);
+    Route::put('/calendar/student/status', [CalendarController::class, 'updateStudentStatus']);
+    Route::get('/calendar/students/list', [CalendarController::class, 'getStudentsList']);
 
-// Public Calendar Teachers routes
-Route::apiResource('calendar-teachers', CalendarTeacherController::class);
-// Alias for typo compatibility (calender-teachers -> calendar-teachers)
-Route::get('/calender-teachers', [CalendarTeacherController::class, 'index']);
-Route::get('/calender-teachers/{id}', [CalendarTeacherController::class, 'show']);
+    // Calendar Teachers routes
+    Route::apiResource('calendar-teachers', CalendarTeacherController::class);
+    // Alias for typo compatibility (calender-teachers -> calendar-teachers)
+    Route::get('/calender-teachers', [CalendarTeacherController::class, 'index']);
+    Route::get('/calender-teachers/{id}', [CalendarTeacherController::class, 'show']);
 
-// Public Calendar Student Stops routes
-Route::apiResource('calendar-student-stops', CalendarStudentStopController::class);
+    // Calendar Student Stops routes
+    Route::apiResource('calendar-student-stops', CalendarStudentStopController::class);
+});
 
 // Public Student Countries routes (no auth required)
 Route::get('/student-countries/plus/{country}', [StudentCountriesController::class, 'plus']);

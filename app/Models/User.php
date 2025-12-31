@@ -126,4 +126,20 @@ class User extends Authenticatable
     {
         return $this->user_type === UserType::Student;
     }
+
+    /**
+     * Check if user is calendar viewer
+     */
+    public function isCalendarViewer(): bool
+    {
+        return $this->user_type === UserType::CalendarViewer;
+    }
+
+    /**
+     * Check if user is certificate viewer
+     */
+    public function isCertificateViewer(): bool
+    {
+        return $this->user_type === UserType::CertificateViewer;
+    }
 }
