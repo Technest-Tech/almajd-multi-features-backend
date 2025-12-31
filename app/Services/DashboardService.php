@@ -86,12 +86,15 @@ class DashboardService
         $currentMonth = Carbon::now()->month;
         $currentYear = Carbon::now()->year;
         
-        $hoursThisMonth = Lesson::whereHas('course', function ($query) use ($teacherId) {
+        // Calculate total hours with proper NULL handling (sum returns NULL if no rows)
+        $totalMinutes = Lesson::whereHas('course', function ($query) use ($teacherId) {
                 $query->where('teacher_id', $teacherId);
             })
             ->whereYear('date', $currentYear)
             ->whereMonth('date', $currentMonth)
-            ->sum(DB::raw('duration')) / 60;
+            ->sum('duration');
+        
+        $hoursThisMonth = ($totalMinutes ?? 0) / 60;
 
         // Calculate profit for this month
         // If teacher has fixed hour_price, calculate: hours * hour_price
