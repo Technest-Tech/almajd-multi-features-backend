@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Enums\UserType;
+use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class DashboardService
 {
@@ -86,13 +88,31 @@ class DashboardService
         $currentMonth = Carbon::now()->month;
         $currentYear = Carbon::now()->year;
         
-        // Calculate total hours with proper NULL handling (sum returns NULL if no rows)
-        $totalMinutes = Lesson::whereHas('course', function ($query) use ($teacherId) {
-                $query->where('teacher_id', $teacherId);
-            })
-            ->whereYear('date', $currentYear)
-            ->whereMonth('date', $currentMonth)
-            ->sum('duration');
+        // Debug: Check if teacher has any courses
+        $coursesCount = Course::where('teacher_id', $teacherId)->count();
+        
+        // Debug: Check if teacher has any lessons at all (without date filter)
+        $allLessonsCount = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
+            ->where('courses.teacher_id', $teacherId)
+            ->count();
+        
+        // Use join for better performance and to ensure we get the right courses
+        $totalMinutes = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
+            ->where('courses.teacher_id', $teacherId)
+            ->whereYear('lessons.date', $currentYear)
+            ->whereMonth('lessons.date', $currentMonth)
+            ->whereNotNull('lessons.duration')
+            ->sum('lessons.duration');
+        
+        // Debug logging
+        Log::info("Teacher Stats Debug", [
+            'teacher_id' => $teacherId,
+            'courses_count' => $coursesCount,
+            'all_lessons_count' => $allLessonsCount,
+            'current_month' => $currentMonth,
+            'current_year' => $currentYear,
+            'total_minutes' => $totalMinutes,
+        ]);
         
         $hoursThisMonth = ($totalMinutes ?? 0) / 60;
 
@@ -106,12 +126,12 @@ class DashboardService
             $totalProfit = $hoursThisMonth * (float) $teacher->hour_price;
         } else {
             // Fallback to summing duty from lessons for this month
-            $totalProfit = Lesson::whereHas('course', function ($query) use ($teacherId) {
-                    $query->where('teacher_id', $teacherId);
-                })
-                ->whereYear('date', $currentYear)
-                ->whereMonth('date', $currentMonth)
-                ->sum('duty') ?? 0;
+            $totalProfit = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
+                ->where('courses.teacher_id', $teacherId)
+                ->whereYear('lessons.date', $currentYear)
+                ->whereMonth('lessons.date', $currentMonth)
+                ->whereNotNull('lessons.duty')
+                ->sum('lessons.duty') ?? 0;
         }
 
         return [
