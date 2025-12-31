@@ -76,24 +76,44 @@ class SalaryService
             // Calculate total hours (duration is in minutes, convert to hours)
             $totalHours = $totalMinutes / 60;
 
-            // Determine hour price: use teacher's price if available, otherwise use unified price
-            $hourPrice = $teacher->hour_price ?? $unifiedHourPrice;
-            
-            // Skip if no hour price available
-            if ($hourPrice === null) {
-                Log::debug("Teacher {$teacher->id} ({$teacher->name}) has no hour_price and no unified price provided");
-                continue;
-            }
-            
-            // Get lesson count for reporting
-            $lessonsCount = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
+            // Get lesson count and check for duty amounts
+            $lessons = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
                 ->where('courses.teacher_id', $teacher->id)
                 ->whereYear('lessons.date', $year)
                 ->whereMonth('lessons.date', $month)
-                ->count();
-
-            // Calculate salary: total_hours * hour_price
-            $salary = $totalHours * (float) $hourPrice;
+                ->select('lessons.duty')
+                ->get();
+            
+            $lessonsCount = $lessons->count();
+            
+            // Calculate salary: 
+            // 1. If teacher has hour_price, use: total_hours * hour_price
+            // 2. If unified_hour_price provided, use: total_hours * unified_hour_price
+            // 3. If lessons have duty amounts, sum them
+            // 4. Otherwise, show 0 salary (but still include the teacher)
+            $salary = 0;
+            $hourPrice = null;
+            
+            if ($teacher->hour_price !== null) {
+                // Use teacher's fixed hour price
+                $hourPrice = (float) $teacher->hour_price;
+                $salary = $totalHours * $hourPrice;
+            } elseif ($unifiedHourPrice !== null) {
+                // Use unified hour price
+                $hourPrice = (float) $unifiedHourPrice;
+                $salary = $totalHours * $hourPrice;
+            } else {
+                // Try to sum duty from lessons (like dashboard does)
+                $totalDuty = $lessons->sum('duty');
+                if ($totalDuty > 0) {
+                    $salary = (float) $totalDuty;
+                    $hourPrice = $totalDuty / $totalHours; // Calculate effective hour price
+                } else {
+                    // No price available, show 0 but still include teacher
+                    $hourPrice = 0;
+                    $salary = 0;
+                }
+            }
 
             // All teachers use EGP currency
             $currency = 'EGP';
