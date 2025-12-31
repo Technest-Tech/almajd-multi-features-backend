@@ -22,8 +22,8 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/client-credentials', [ClientCredentialsController::class, 'getCredentials']);
 
-// Calendar routes - require authentication and allow calendar_viewer, admin, teacher, student
-Route::middleware(['auth:sanctum', 'restrict.user.type:calendar_viewer,admin,teacher,student'])->group(function () {
+// Public Calendar routes (no auth required) - explicitly exclude Sanctum middleware
+Route::withoutMiddleware(['auth:sanctum'])->group(function () {
     Route::get('/calendar/events', [CalendarController::class, 'getEvents']);
     Route::get('/calendar/reminders/daily', [CalendarController::class, 'generateDailyReminder']);
     Route::get('/calendar/reminders/exceptional', [CalendarController::class, 'getExceptionalReminders']);
@@ -39,13 +39,13 @@ Route::middleware(['auth:sanctum', 'restrict.user.type:calendar_viewer,admin,tea
     Route::put('/calendar/student/status', [CalendarController::class, 'updateStudentStatus']);
     Route::get('/calendar/students/list', [CalendarController::class, 'getStudentsList']);
 
-    // Calendar Teachers routes
+    // Public Calendar Teachers routes
     Route::apiResource('calendar-teachers', CalendarTeacherController::class);
     // Alias for typo compatibility (calender-teachers -> calendar-teachers)
     Route::get('/calender-teachers', [CalendarTeacherController::class, 'index']);
     Route::get('/calender-teachers/{id}', [CalendarTeacherController::class, 'show']);
 
-    // Calendar Student Stops routes
+    // Public Calendar Student Stops routes
     Route::apiResource('calendar-student-stops', CalendarStudentStopController::class);
 });
 
