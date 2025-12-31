@@ -55,6 +55,7 @@ Route::get('payment/{token}', [PaymentController::class, 'show'])->name('payment
 Route::get('pay/{token}', [PaymentController::class, 'show'])->name('payment.show.short');
 Route::get('payment/{token}/status', [PaymentController::class, 'checkStatus'])->name('payment.status');
 Route::get('payment/{token}/success', [PaymentController::class, 'success'])->name('payment.success');
+Route::get('payment/{token}/download-report', [PaymentController::class, 'downloadReport'])->name('payment.download-report');
 Route::get('payment/cancel', [PaymentController::class, 'cancel'])->name('payment.cancel');
 
 // XPay routes

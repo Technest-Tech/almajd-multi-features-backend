@@ -9,14 +9,18 @@ use App\Models\PaymentLog;
 use App\Models\PaymentSettings;
 use App\Models\User;
 use App\Services\PaymentService;
+use App\Services\ReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
+use Spatie\LaravelPdf\Facades\Pdf;
+use Carbon\Carbon;
 
 class PaymentController extends Controller
 {
     public function __construct(
-        private PaymentService $paymentService
+        private PaymentService $paymentService,
+        private ReportService $reportService
     ) {}
 
     /**
@@ -446,5 +450,76 @@ class PaymentController extends Controller
             'paid_at' => $billing->paid_at,
             'payment_method' => $billing->payment_method,
         ]);
+    }
+
+    /**
+     * Download month report for student
+     */
+    public function downloadReport(string $token)
+    {
+        // Find billing by token
+        $autoBilling = AutoBilling::where('payment_token', $token)->first();
+        $manualBilling = ManualBilling::where('payment_token', $token)->first();
+
+        if (!$autoBilling && !$manualBilling) {
+            abort(404, 'Payment link not found');
+        }
+
+        // Only allow for auto billing (monthly reports)
+        if (!$autoBilling) {
+            abort(404, 'Report only available for monthly billing');
+        }
+
+        $student = $autoBilling->student;
+        
+        if (!$student) {
+            abort(404, 'Student not found');
+        }
+
+        // Calculate date range for the month
+        $year = $autoBilling->year;
+        $month = $autoBilling->month;
+        
+        // Get first and last day of the month
+        $fromDate = Carbon::create($year, $month, 1)->startOfMonth()->format('Y-m-d');
+        $toDate = Carbon::create($year, $month, 1)->endOfMonth()->format('Y-m-d');
+
+        try {
+            $lessons = $this->reportService->getStudentLessons($student->id, $fromDate, $toDate);
+            $totalCost = $this->reportService->calculateTotalCost($lessons);
+
+            // Sanitize filename to avoid issues with special characters
+            $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $student->name);
+            $filename = 'student-report-' . $sanitizedName . '-' . $month . '-' . $year . '.pdf';
+
+            $pdf = Pdf::view('reports.student_report', [
+                'student' => $student,
+                'lessons' => $lessons,
+                'totalCost' => $totalCost,
+                'fromDate' => $fromDate,
+                'toDate' => $toDate,
+                'reportService' => $this->reportService,
+            ])
+            ->format('a4')
+            ->name($filename)
+            ->withBrowsershot(function ($browsershot) {
+                $browsershot
+                    ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
+                    ->margins(10, 10, 10, 10, 'mm')
+                    ->showBackground()
+                    ->waitUntilNetworkIdle()
+                    ->timeout(120);
+            });
+
+            return $pdf->download();
+        } catch (\Exception $e) {
+            Log::error('Payment page report generation error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'student_id' => $student->id,
+                'from_date' => $fromDate,
+                'to_date' => $toDate,
+            ]);
+            abort(500, 'Failed to generate report: ' . $e->getMessage());
+        }
     }
 }

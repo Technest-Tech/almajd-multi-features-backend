@@ -599,6 +599,14 @@
                 <div class="label">Total Amount</div>
                 <div class="value">{{ $amount }} {{ $billing->currency instanceof \App\Enums\Currency ? $billing->currency->symbol() : $billing->currency }}</div>
             </div>
+            
+            @if($billingType === 'auto')
+            <div style="margin-top: 12px; text-align: center;">
+                <a href="{{ url('/payment/' . $token . '/download-report') }}" class="btn btn-secondary" style="background: linear-gradient(135deg, #ffb74d 0%, #ff8a65 100%);">
+                    📥 Download Month Report
+                </a>
+            </div>
+            @endif
         </div>
 
         <div class="payment-methods">
