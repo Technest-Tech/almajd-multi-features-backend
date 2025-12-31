@@ -16,14 +16,12 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-// Certificate routes - require authentication and allow certificate_viewer, admin
-Route::middleware(['auth', 'restrict.web.user.type:certificate_viewer,admin'])->group(function () {
-    Route::get('certificates', [CertificateController::class, 'index'])->name('certificates.index');
-    Route::get('certificates/create', [CertificateController::class, 'create'])->name('certificates.create');
-    Route::get('certificates/{id}', [CertificateController::class, 'show'])->name('certificates.show');
-    Route::match(['get', 'post'], 'certificates/{id}/download', [CertificateController::class, 'download'])->name('certificates.download');
-    Route::get('certificates/health-check', [CertificateController::class, 'healthCheck'])->name('certificates.health-check');
-});
+// Certificate routes (fully public, no database saving)
+Route::get('certificates', [CertificateController::class, 'index'])->name('certificates.index');
+Route::get('certificates/create', [CertificateController::class, 'create'])->name('certificates.create');
+Route::get('certificates/{id}', [CertificateController::class, 'show'])->name('certificates.show');
+Route::match(['get', 'post'], 'certificates/{id}/download', [CertificateController::class, 'download'])->name('certificates.download');
+Route::get('certificates/health-check', [CertificateController::class, 'healthCheck'])->name('certificates.health-check');
 
 // Timetable calendar routes (public, accessible from Flutter WebView)
 // IMPORTANT: More specific routes must come before parameterized routes
