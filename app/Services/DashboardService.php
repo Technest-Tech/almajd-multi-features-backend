@@ -93,11 +93,23 @@ class DashboardService
             ->whereMonth('date', $currentMonth)
             ->sum(DB::raw('duration')) / 60;
 
-        // Total profit (sum of duty from lessons - all are 'present' by default)
-        $totalProfit = Lesson::whereHas('course', function ($query) use ($teacherId) {
-                $query->where('teacher_id', $teacherId);
-            })
-            ->sum('duty') ?? 0;
+        // Calculate profit for this month
+        // If teacher has fixed hour_price, calculate: hours * hour_price
+        // Otherwise, sum duty from lessons for this month
+        $totalProfit = 0;
+        
+        if ($teacher->hour_price !== null) {
+            // Use fixed hour price: hours * hour_price
+            $totalProfit = $hoursThisMonth * (float) $teacher->hour_price;
+        } else {
+            // Fallback to summing duty from lessons for this month
+            $totalProfit = Lesson::whereHas('course', function ($query) use ($teacherId) {
+                    $query->where('teacher_id', $teacherId);
+                })
+                ->whereYear('date', $currentYear)
+                ->whereMonth('date', $currentMonth)
+                ->sum('duty') ?? 0;
+        }
 
         return [
             'assigned_students_count' => $assignedStudentsCount,
