@@ -85,8 +85,9 @@ class DashboardService
         $assignedStudentsCount = $teacher->assignedStudents()->count();
 
         // Hours this month (all lessons are 'present' by default)
-        $currentMonth = Carbon::now()->month;
-        $currentYear = Carbon::now()->year;
+        // Include lessons from current month onwards (current month + future months)
+        $now = Carbon::now();
+        $startOfCurrentMonth = $now->copy()->startOfMonth();
         
         // Debug: Check if teacher has any courses
         $coursesCount = Course::where('teacher_id', $teacherId)->count();
@@ -97,10 +98,10 @@ class DashboardService
             ->count();
         
         // Use join for better performance and to ensure we get the right courses
+        // Include lessons from current month onwards
         $totalMinutes = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
             ->where('courses.teacher_id', $teacherId)
-            ->whereYear('lessons.date', $currentYear)
-            ->whereMonth('lessons.date', $currentMonth)
+            ->where('lessons.date', '>=', $startOfCurrentMonth->format('Y-m-d'))
             ->whereNotNull('lessons.duration')
             ->sum('lessons.duration');
         
@@ -109,8 +110,7 @@ class DashboardService
             'teacher_id' => $teacherId,
             'courses_count' => $coursesCount,
             'all_lessons_count' => $allLessonsCount,
-            'current_month' => $currentMonth,
-            'current_year' => $currentYear,
+            'start_of_current_month' => $startOfCurrentMonth->format('Y-m-d'),
             'total_minutes' => $totalMinutes,
         ]);
         
@@ -125,11 +125,10 @@ class DashboardService
             // Use fixed hour price: hours * hour_price
             $totalProfit = $hoursThisMonth * (float) $teacher->hour_price;
         } else {
-            // Fallback to summing duty from lessons for this month
+            // Fallback to summing duty from lessons from current month onwards
             $totalProfit = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
                 ->where('courses.teacher_id', $teacherId)
-                ->whereYear('lessons.date', $currentYear)
-                ->whereMonth('lessons.date', $currentMonth)
+                ->where('lessons.date', '>=', $startOfCurrentMonth->format('Y-m-d'))
                 ->whereNotNull('lessons.duty')
                 ->sum('lessons.duty') ?? 0;
         }
