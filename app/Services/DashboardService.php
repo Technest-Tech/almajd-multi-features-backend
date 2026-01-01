@@ -137,6 +137,7 @@ class DashboardService
             'assigned_students_count' => $assignedStudentsCount,
             'hours_this_month' => round($hoursThisMonth, 2),
             'total_profit' => round($totalProfit, 2),
+            'courses_count' => $coursesCount,
         ];
     }
 }
