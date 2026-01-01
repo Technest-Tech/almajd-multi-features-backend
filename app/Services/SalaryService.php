@@ -87,19 +87,19 @@ class SalaryService
             $lessonsCount = $lessons->count();
             
             // Calculate salary: 
-            // 1. If teacher has hour_price, use: total_hours * hour_price
-            // 2. If unified_hour_price provided, use: total_hours * unified_hour_price
+            // 1. If teacher has hour_price (and it's > 0), use: total_hours * hour_price
+            // 2. If unified_hour_price provided, use: total_hours * unified_hour_price (for teachers without hour_price or with hour_price = 0)
             // 3. If lessons have duty amounts, sum them
             // 4. Otherwise, show 0 salary (but still include the teacher)
             $salary = 0;
             $hourPrice = null;
             
-            if ($teacher->hour_price !== null) {
-                // Use teacher's fixed hour price
+            if ($teacher->hour_price !== null && (float) $teacher->hour_price > 0) {
+                // Use teacher's fixed hour price (only if it's > 0)
                 $hourPrice = (float) $teacher->hour_price;
                 $salary = $totalHours * $hourPrice;
             } elseif ($unifiedHourPrice !== null) {
-                // Use unified hour price
+                // Use unified hour price (for teachers without hour_price or with hour_price = 0)
                 $hourPrice = (float) $unifiedHourPrice;
                 $salary = $totalHours * $hourPrice;
             } else {
