@@ -21,9 +21,18 @@ class UpdateLessonRequest extends FormRequest
      */
     public function rules(): array
     {
+        $user = $this->user();
+        $isAdmin = $user && $user->isAdmin();
+        
+        $dateRules = ['sometimes', 'required', 'date'];
+        // Only enforce "after_or_equal:today" if user is not an admin
+        if (!$isAdmin) {
+            $dateRules[] = 'after_or_equal:today';
+        }
+        
         return [
             'course_id' => ['sometimes', 'required', 'exists:courses,id'],
-            'date' => ['sometimes', 'required', 'date', 'after_or_equal:today'],
+            'date' => $dateRules,
             'duration' => ['sometimes', 'required', 'integer', 'min:1'],
             // Status is always 'present' by default, not user-selectable
             'notes' => ['nullable', 'string'],

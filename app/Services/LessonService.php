@@ -54,18 +54,8 @@ class LessonService
 
     public function create(array $data): Lesson
     {
-        // Validate date is today or future
-        try {
-            $date = Carbon::parse($data['date'])->startOfDay();
-            $today = Carbon::today()->startOfDay();
-        
-        if ($date->lt($today)) {
-            throw new \InvalidArgumentException('Lesson date must be today or in the future');
-            }
-        } catch (\Exception $e) {
-            throw new \InvalidArgumentException('Invalid date format: ' . ($data['date'] ?? 'null'));
-        }
-
+        // Date validation is handled in StoreLessonRequest
+        // Admins can add lessons with past dates, others cannot
         try {
             // Always set status to 'present' (default for all lessons)
             $data['status'] = \App\Enums\LessonStatus::Present;
@@ -94,15 +84,8 @@ class LessonService
     {
         $oldDate = $lesson->date;
         
-        // Validate date is today or future if date is being updated
-        if (isset($data['date'])) {
-            $date = Carbon::parse($data['date']);
-            $today = Carbon::today();
-            
-            if ($date->lt($today)) {
-                throw new \InvalidArgumentException('Lesson date must be today or in the future');
-            }
-        }
+        // Date validation is handled in UpdateLessonRequest
+        // Admins can update lessons with past dates, others cannot
 
         // Always keep status as 'present' (status cannot be changed)
         unset($data['status']);
