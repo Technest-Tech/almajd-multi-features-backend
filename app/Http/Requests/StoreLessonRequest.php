@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\PaymentSettings;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreLessonRequest extends FormRequest
@@ -23,10 +24,21 @@ class StoreLessonRequest extends FormRequest
     {
         $user = $this->user();
         $isAdmin = $user && $user->isAdmin();
+        $isTeacher = $user && $user->isTeacher();
+        
+        // Check if teachers can add past lessons (if user is a teacher)
+        $canAddPastLessons = false;
+        if ($isAdmin) {
+            $canAddPastLessons = true; // Admins can always add past lessons
+        } elseif ($isTeacher) {
+            // Check if admin has enabled this setting for teachers
+            $teachersCanAddPastLessons = PaymentSettings::getSetting('teachers_can_add_past_lessons', '0');
+            $canAddPastLessons = $teachersCanAddPastLessons === '1';
+        }
         
         $dateRules = ['required', 'date'];
-        // Only enforce "after_or_equal:today" if user is not an admin
-        if (!$isAdmin) {
+        // Only enforce "after_or_equal:today" if user cannot add past lessons
+        if (!$canAddPastLessons) {
             $dateRules[] = 'after_or_equal:today';
         }
         

@@ -23,10 +23,18 @@ class UpdateLessonRequest extends FormRequest
     {
         $user = $this->user();
         $isAdmin = $user && $user->isAdmin();
+        $isTeacher = $user && $user->isTeacher();
+        
+        // Check if teachers can add past lessons (if user is a teacher)
+        $canAddPastLessons = $isAdmin;
+        if ($isTeacher && !$isAdmin) {
+            $teachersCanAddPastLessons = \App\Models\PaymentSettings::getSetting('teachers_can_add_past_lessons', '0');
+            $canAddPastLessons = $teachersCanAddPastLessons === '1';
+        }
         
         $dateRules = ['sometimes', 'required', 'date'];
-        // Only enforce "after_or_equal:today" if user is not an admin
-        if (!$isAdmin) {
+        // Only enforce "after_or_equal:today" if user cannot add past lessons
+        if (!$canAddPastLessons) {
             $dateRules[] = 'after_or_equal:today';
         }
         
