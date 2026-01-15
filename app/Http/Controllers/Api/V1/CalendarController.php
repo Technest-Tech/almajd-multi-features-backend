@@ -692,16 +692,23 @@ class CalendarController extends Controller
             // URL encode the message
             $report = urlencode($message);
 
-            // Try to find the teacher in users table by name to get their WhatsApp
-            $user = User::where('user_type', UserType::Teacher)
-                ->where('name', 'LIKE', '%' . $teacher->name . '%')
-                ->orWhere('name', 'LIKE', $teacher->name . '%')
-                ->first();
+            // Use WhatsApp number from calendar_teachers table (primary source)
+            // Only fall back to users table if calendar_teachers doesn't have a WhatsApp number
+            $phoneNumber = $teacher->whatsapp;
             
-            // Use user's WhatsApp if found, otherwise fall back to calendar_teachers whatsapp
-            $phoneNumber = $user && $user->whatsapp_number 
-                ? $user->whatsapp_number 
-                : $teacher->whatsapp;
+            // If calendar_teachers doesn't have WhatsApp, try to find in users table
+            if (!$phoneNumber || empty(trim($phoneNumber))) {
+                $user = User::where('user_type', UserType::Teacher)
+                    ->where(function($query) use ($teacher) {
+                        $query->where('name', 'LIKE', '%' . $teacher->name . '%')
+                              ->orWhere('name', 'LIKE', $teacher->name . '%');
+                    })
+                    ->first();
+                
+                $phoneNumber = $user && $user->whatsapp_number 
+                    ? $user->whatsapp_number 
+                    : null;
+            }
 
             return response()->json([
                 'report' => $report,
@@ -737,16 +744,23 @@ class CalendarController extends Controller
                 ->orderBy('start_time')
                 ->get();
 
-            // Try to find the teacher in users table by name to get their WhatsApp
-            $user = User::where('user_type', UserType::Teacher)
-                ->where('name', 'LIKE', '%' . $teacher->name . '%')
-                ->orWhere('name', 'LIKE', $teacher->name . '%')
-                ->first();
+            // Use WhatsApp number from calendar_teachers table (primary source)
+            // Only fall back to users table if calendar_teachers doesn't have a WhatsApp number
+            $phoneNumber = $teacher->whatsapp;
             
-            // Use user's WhatsApp if found, otherwise fall back to calendar_teachers whatsapp
-            $phoneNumber = $user && $user->whatsapp_number 
-                ? $user->whatsapp_number 
-                : $teacher->whatsapp;
+            // If calendar_teachers doesn't have WhatsApp, try to find in users table
+            if (!$phoneNumber || empty(trim($phoneNumber))) {
+                $user = User::where('user_type', UserType::Teacher)
+                    ->where(function($query) use ($teacher) {
+                        $query->where('name', 'LIKE', '%' . $teacher->name . '%')
+                              ->orWhere('name', 'LIKE', $teacher->name . '%');
+                    })
+                    ->first();
+                
+                $phoneNumber = $user && $user->whatsapp_number 
+                    ? $user->whatsapp_number 
+                    : null;
+            }
 
             if (!$phoneNumber) {
                 return response()->json([
