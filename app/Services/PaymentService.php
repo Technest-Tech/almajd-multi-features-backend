@@ -222,6 +222,9 @@ class PaymentService
             $userId = $additionalData['user_id'] ?? $data['user_id'] ?? null;
             $month = $additionalData['month'] ?? $data['month'] ?? null;
             $billingIdFromData = $additionalData['billing_id'] ?? $data['billing_id'] ?? $billingId;
+            
+            // Convert billing_id to integer if it's a string
+            $billingIdFromData = (int) $billingIdFromData;
 
             // Check if billing exists
             $billing = $type === 'auto' 

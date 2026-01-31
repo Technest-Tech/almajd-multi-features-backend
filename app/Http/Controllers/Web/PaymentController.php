@@ -386,12 +386,21 @@ class PaymentController extends Controller
             }
 
             $billingId = $additionalData['billing_id'] ?? $data['billing_id'] ?? null;
-            $billingType = $additionalData['billing_type'] ?? $data['billing_type'] ?? 'auto';
+            
+            // Determine billing type: if billing_id is provided, it's manual; otherwise auto
+            $billingType = $additionalData['billing_type'] ?? $data['billing_type'] ?? null;
+            if (!$billingType) {
+                // If billing_id is provided, it's manual billing; otherwise auto
+                $billingType = $billingId ? 'manual' : 'auto';
+            }
 
             if (!$billingId) {
                 Log::warning('AnubPay webhook: No billing_id found');
                 return response()->json(['error' => 'No billing_id found'], 400);
             }
+
+            // Convert billing_id to integer if it's a string
+            $billingId = (int) $billingId;
 
             // Process payment
             $success = $this->paymentService->processAnubPayCallback(
