@@ -265,6 +265,11 @@ class PaymentController extends Controller
         }
 
         try {
+            // Convert billing_id to integer if it's a string
+            if ($billingId) {
+                $billingId = (int) $billingId;
+            }
+            
             if ($billingId) {
                 // Manual billing
                 $billing = ManualBilling::find($billingId);

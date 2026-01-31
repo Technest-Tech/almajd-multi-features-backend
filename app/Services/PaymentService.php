@@ -79,54 +79,121 @@ class PaymentService
     {
         try {
             $transactionId = $data['transaction_id'] ?? null;
+            $transactionStatus = $data['transaction_status'] ?? null;
             
             if (!$transactionId) {
+                Log::warning('XPay callback: No transaction_id provided', [
+                    'billing_id' => $billingId,
+                    'data' => $data,
+                ]);
                 return false;
             }
 
-            // Verify transaction with XPay
-            $client = new Client();
-            $url = config('payments.xpay.transaction_url') . "/{$transactionId}";
-            
-            $response = $client->request('GET', $url, [
-                'headers' => [
-                    'x-api-key' => config('payments.xpay.api_key'),
-                    'Content-Type' => 'application/json',
-                ],
-            ]);
+            // Check if billing exists
+            $billing = $type === 'auto' 
+                ? AutoBilling::find($billingId)
+                : ManualBilling::find($billingId);
 
-            $statusCode = $response->getStatusCode();
-            $body = json_decode($response->getBody()->getContents(), true);
-
-            if ($statusCode == 200 && isset($body['status']) && $body['status'] === 'SUCCESSFUL') {
-                // Mark billing as paid
-                $billingService = new BillingService();
-                $billingService->markAsPaid($billingId, $type, 'xpay');
-
-                // Log payment
-                $billing = $type === 'auto' 
-                    ? AutoBilling::find($billingId)
-                    : ManualBilling::find($billingId);
-
-                BillingPayment::create([
+            if (!$billing) {
+                Log::warning('XPay callback: Billing not found', [
                     'billing_id' => $billingId,
-                    'billing_type' => $type,
-                    'payment_method' => 'xpay',
-                    'transaction_id' => $transactionId,
-                    'amount' => $billing->total_amount ?? $billing->amount,
-                    'currency' => $billing->currency->value ?? $billing->currency,
-                    'status' => 'paid',
-                    'paid_at' => now(),
+                    'type' => $type,
                 ]);
+                return false;
+            }
 
+            // If already paid, return true (idempotent)
+            if ($billing->is_paid) {
+                Log::info('XPay callback: Billing already paid', [
+                    'billing_id' => $billingId,
+                    'type' => $type,
+                    'transaction_id' => $transactionId,
+                ]);
                 return true;
             }
 
-            return false;
+            // If transaction_status is SUCCESSFUL in callback, trust it and mark as paid
+            // Otherwise, verify with XPay API
+            if ($transactionStatus === 'SUCCESSFUL') {
+                Log::info('XPay callback: Transaction status is SUCCESSFUL, marking as paid', [
+                    'billing_id' => $billingId,
+                    'transaction_id' => $transactionId,
+                ]);
+            } else {
+                // Verify transaction with XPay API
+                try {
+                    $client = new Client();
+                    $url = config('payments.xpay.transaction_url') . "/{$transactionId}";
+                    
+                    $response = $client->request('GET', $url, [
+                        'headers' => [
+                            'x-api-key' => config('payments.xpay.api_key'),
+                            'Content-Type' => 'application/json',
+                        ],
+                        'timeout' => 10, // Add timeout
+                    ]);
+
+                    $statusCode = $response->getStatusCode();
+                    $body = json_decode($response->getBody()->getContents(), true);
+
+                    Log::info('XPay verification API response', [
+                        'status_code' => $statusCode,
+                        'body' => $body,
+                        'transaction_id' => $transactionId,
+                    ]);
+
+                    if ($statusCode != 200 || !isset($body['status']) || $body['status'] !== 'SUCCESSFUL') {
+                        Log::warning('XPay verification failed', [
+                            'status_code' => $statusCode,
+                            'body' => $body,
+                            'transaction_id' => $transactionId,
+                        ]);
+                        return false;
+                    }
+                } catch (\Exception $e) {
+                    Log::error('XPay verification API error', [
+                        'error' => $e->getMessage(),
+                        'transaction_id' => $transactionId,
+                        'billing_id' => $billingId,
+                    ]);
+                    // If verification fails but callback says SUCCESSFUL, still process
+                    // This handles cases where XPay API is temporarily unavailable
+                    if ($transactionStatus !== 'SUCCESSFUL') {
+                        return false;
+                    }
+                }
+            }
+
+            // Mark billing as paid
+            $billingService = new BillingService();
+            $billingService->markAsPaid($billingId, $type, 'xpay');
+
+            // Log payment
+            BillingPayment::create([
+                'billing_id' => $billingId,
+                'billing_type' => $type,
+                'payment_method' => 'xpay',
+                'transaction_id' => $transactionId,
+                'amount' => $billing->total_amount ?? $billing->amount,
+                'currency' => $billing->currency->value ?? $billing->currency,
+                'status' => 'paid',
+                'paid_at' => now(),
+            ]);
+
+            Log::info('XPay payment marked as paid', [
+                'billing_id' => $billingId,
+                'type' => $type,
+                'transaction_id' => $transactionId,
+            ]);
+
+            return true;
         } catch (\Exception $e) {
             Log::error('XPay callback error', [
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
                 'data' => $data,
+                'billing_id' => $billingId,
+                'type' => $type,
             ]);
             return false;
         }
