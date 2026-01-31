@@ -12,6 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->validateCsrfTokens(except: [
+            'payment/xpay/callback',
+            'api/handle-anubpay-payment',
+        ]);
+        
         $middleware->alias([
             'restrict.user.type' => \App\Http\Middleware\RestrictUserType::class,
             'restrict.web.user.type' => \App\Http\Middleware\RestrictWebUserType::class,
