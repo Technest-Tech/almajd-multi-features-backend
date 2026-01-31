@@ -210,6 +210,12 @@ class PaymentController extends Controller
                 "field_label" => "billing_id",
                 "field_value" => $manualBilling->id
             ];
+        } else {
+            // Add year for auto billings
+            $data["custom_fields"][] = [
+                "field_label" => "year",
+                "field_value" => $autoBilling->year
+            ];
         }
 
         $headers = [
@@ -252,6 +258,7 @@ class PaymentController extends Controller
         $transactionId = $request->input('transaction_id');
         $userId = $request->input('user_id');
         $month = $request->input('month');
+        $year = $request->input('year');
         $billingId = $request->input('billing_id');
         $transactionStatus = $request->input('transaction_status');
 
@@ -270,16 +277,45 @@ class PaymentController extends Controller
                 $billingId = (int) $billingId;
             }
             
+            // Convert user_id, month, and year to integers
+            if ($userId) {
+                $userId = (int) $userId;
+            }
+            if ($month) {
+                $month = (int) $month;
+            }
+            if ($year) {
+                $year = (int) $year;
+            }
+            
             if ($billingId) {
                 // Manual billing
                 $billing = ManualBilling::find($billingId);
                 $billingType = 'manual';
             } else {
-                // Auto billing
-                $billing = AutoBilling::where('student_id', $userId)
-                    ->where('month', $month)
-                    ->first();
+                // Auto billing - need year, month, and student_id
+                $query = AutoBilling::where('student_id', $userId)
+                    ->where('month', $month);
+                
+                if ($year) {
+                    $query->where('year', $year);
+                }
+                
+                $billing = $query->first();
                 $billingType = 'auto';
+                
+                // If not found with year, try without year (fallback for old payments)
+                if (!$billing && $userId && $month) {
+                    Log::warning('XPay callback: Auto billing not found with year, trying without year', [
+                        'user_id' => $userId,
+                        'month' => $month,
+                        'year' => $year,
+                    ]);
+                    $billing = AutoBilling::where('student_id', $userId)
+                        ->where('month', $month)
+                        ->orderBy('year', 'desc') // Get the most recent one
+                        ->first();
+                }
             }
 
             if (!$billing) {
@@ -287,6 +323,7 @@ class PaymentController extends Controller
                     'billing_id' => $billingId,
                     'user_id' => $userId,
                     'month' => $month,
+                    'year' => $year,
                 ]);
                 return view('payments.cancel');
             }
