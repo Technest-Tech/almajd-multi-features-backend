@@ -230,10 +230,27 @@ class PaymentController extends Controller
      */
     public function xpayCallback(Request $request)
     {
+        // Log incoming callback for debugging
+        Log::info('XPay callback received', [
+            'method' => $request->method(),
+            'all_params' => $request->all(),
+            'transaction_status' => $request->input('transaction_status'),
+        ]);
+
         $transactionId = $request->input('transaction_id');
         $userId = $request->input('user_id');
         $month = $request->input('month');
         $billingId = $request->input('billing_id');
+        $transactionStatus = $request->input('transaction_status');
+
+        // Check if transaction status is successful
+        if ($transactionStatus && $transactionStatus !== 'SUCCESSFUL') {
+            Log::warning('XPay callback: Transaction not successful', [
+                'transaction_status' => $transactionStatus,
+                'transaction_id' => $transactionId,
+            ]);
+            return view('payments.cancel');
+        }
 
         try {
             if ($billingId) {
@@ -249,6 +266,11 @@ class PaymentController extends Controller
             }
 
             if (!$billing) {
+                Log::warning('XPay callback: Billing not found', [
+                    'billing_id' => $billingId,
+                    'user_id' => $userId,
+                    'month' => $month,
+                ]);
                 return view('payments.cancel');
             }
 
@@ -260,12 +282,23 @@ class PaymentController extends Controller
             );
 
             if ($success) {
+                Log::info('XPay callback: Payment processed successfully', [
+                    'billing_id' => $billing->id,
+                    'transaction_id' => $transactionId,
+                ]);
                 return view('payments.success');
             }
 
+            Log::warning('XPay callback: Payment processing failed', [
+                'billing_id' => $billing->id,
+                'transaction_id' => $transactionId,
+            ]);
             return view('payments.cancel');
         } catch (\Exception $e) {
-            Log::error('XPay callback error: ' . $e->getMessage());
+            Log::error('XPay callback error: ' . $e->getMessage(), [
+                'exception' => $e,
+                'request_data' => $request->all(),
+            ]);
             return view('payments.cancel');
         }
     }

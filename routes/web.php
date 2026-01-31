@@ -67,7 +67,8 @@ Route::get('payment/cancel', [PaymentController::class, 'cancel'])->name('paymen
 // XPay routes
 Route::get('payment/{token}/xpay/form', [PaymentController::class, 'xpayForm'])->name('payment.xpay.form');
 Route::post('payment/{token}/xpay/process', [PaymentController::class, 'xpayProcess'])->name('payment.xpay.process');
-Route::post('payment/xpay/callback', [PaymentController::class, 'xpayCallback'])->name('payment.xpay.callback');
+// XPay callback - accepts both GET and POST (XPay sends GET with query parameters)
+Route::match(['get', 'post'], 'payment/xpay/callback', [PaymentController::class, 'xpayCallback'])->name('payment.xpay.callback');
 
 // PayPal routes
 Route::get('payment/{token}/paypal/success', [PaymentController::class, 'paypalSuccess'])->name('payment.paypal.success');
