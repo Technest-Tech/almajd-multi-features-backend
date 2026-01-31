@@ -56,19 +56,23 @@ Route::post('calendar-students/bulk-delete', [CalendarStudentController::class, 
 Route::get('calendar-students/search', [CalendarStudentController::class, 'search'])->name('calendar-students.search');
 
 // Payment routes (public, no auth required)
+// IMPORTANT: Specific routes must come before parameterized routes to avoid conflicts
+Route::get('payment/cancel', [PaymentController::class, 'cancel'])->name('payment.cancel');
+
+// XPay routes - must come before payment/{token} to avoid route conflicts
+Route::get('payment/{token}/xpay/form', [PaymentController::class, 'xpayForm'])->name('payment.xpay.form');
+Route::post('payment/{token}/xpay/process', [PaymentController::class, 'xpayProcess'])->name('payment.xpay.process');
+// XPay callback - accepts both GET and POST (XPay sends GET with query parameters)
+// Must be before payment/{token} route to ensure proper matching
+Route::match(['get', 'post'], 'payment/xpay/callback', [PaymentController::class, 'xpayCallback'])->name('payment.xpay.callback');
+
+// Parameterized payment routes (must come after specific routes)
 Route::get('payment/{token}', [PaymentController::class, 'show'])->name('payment.show');
 // Shorter payment route alias
 Route::get('pay/{token}', [PaymentController::class, 'show'])->name('payment.show.short');
 Route::get('payment/{token}/status', [PaymentController::class, 'checkStatus'])->name('payment.status');
 Route::get('payment/{token}/success', [PaymentController::class, 'success'])->name('payment.success');
 Route::get('payment/{token}/download-report', [PaymentController::class, 'downloadReport'])->name('payment.download-report');
-Route::get('payment/cancel', [PaymentController::class, 'cancel'])->name('payment.cancel');
-
-// XPay routes
-Route::get('payment/{token}/xpay/form', [PaymentController::class, 'xpayForm'])->name('payment.xpay.form');
-Route::post('payment/{token}/xpay/process', [PaymentController::class, 'xpayProcess'])->name('payment.xpay.process');
-// XPay callback - accepts both GET and POST (XPay sends GET with query parameters)
-Route::match(['get', 'post'], 'payment/xpay/callback', [PaymentController::class, 'xpayCallback'])->name('payment.xpay.callback');
 
 // PayPal routes
 Route::get('payment/{token}/paypal/success', [PaymentController::class, 'paypalSuccess'])->name('payment.paypal.success');
