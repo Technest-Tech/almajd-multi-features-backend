@@ -16,24 +16,48 @@ class PaymentService
     public function processPayPalCallback(array $data, int $billingId, string $type): bool
     {
         try {
+            // Check if billing already paid to avoid duplicate processing
+            $billing = $type === 'auto' 
+                ? AutoBilling::find($billingId)
+                : ManualBilling::find($billingId);
+
+            if (!$billing) {
+                Log::warning('PayPal callback: Billing not found', [
+                    'billing_id' => $billingId,
+                    'type' => $type,
+                ]);
+                return false;
+            }
+
+            // If already paid, return true (idempotent)
+            if ($billing->is_paid) {
+                Log::info('PayPal callback: Billing already paid', [
+                    'billing_id' => $billingId,
+                    'type' => $type,
+                ]);
+                return true;
+            }
+
             // Mark billing as paid
             $billingService = new BillingService();
             $billingService->markAsPaid($billingId, $type, 'paypal');
 
             // Log payment
-            $billing = $type === 'auto' 
-                ? AutoBilling::find($billingId)
-                : ManualBilling::find($billingId);
-
             BillingPayment::create([
                 'billing_id' => $billingId,
                 'billing_type' => $type,
                 'payment_method' => 'paypal',
-                'transaction_id' => $data['transaction_id'] ?? null,
+                'transaction_id' => $data['transaction_id'] ?? $data['paymentId'] ?? null,
                 'amount' => $billing->total_amount ?? $billing->amount,
                 'currency' => $billing->currency->value ?? $billing->currency,
                 'status' => 'paid',
                 'paid_at' => now(),
+            ]);
+
+            Log::info('PayPal payment marked as paid', [
+                'billing_id' => $billingId,
+                'type' => $type,
+                'transaction_id' => $data['transaction_id'] ?? $data['paymentId'] ?? null,
             ]);
 
             return true;
@@ -41,6 +65,8 @@ class PaymentService
             Log::error('PayPal callback error', [
                 'error' => $e->getMessage(),
                 'data' => $data,
+                'billing_id' => $billingId,
+                'type' => $type,
             ]);
             return false;
         }
@@ -177,8 +203,13 @@ class PaymentService
     {
         try {
             // Check if payment was successful
+            // If status field exists and is not 1, payment failed
+            // If status field doesn't exist, assume successful (webhook was sent)
             if (isset($data['status']) && $data['status'] != 1) {
-                Log::warning('AnubPay payment not successful', ['status' => $data['status']]);
+                Log::warning('AnubPay payment not successful', [
+                    'status' => $data['status'],
+                    'billing_id' => $billingId,
+                ]);
                 return false;
             }
 
@@ -192,11 +223,33 @@ class PaymentService
             $month = $additionalData['month'] ?? $data['month'] ?? null;
             $billingIdFromData = $additionalData['billing_id'] ?? $data['billing_id'] ?? $billingId;
 
+            // Check if billing exists
+            $billing = $type === 'auto' 
+                ? AutoBilling::find($billingIdFromData)
+                : ManualBilling::find($billingIdFromData);
+
+            if (!$billing) {
+                Log::warning('AnubPay callback: Billing not found', [
+                    'billing_id' => $billingIdFromData,
+                    'type' => $type,
+                ]);
+                return false;
+            }
+
+            // If already paid, return true (idempotent)
+            if ($billing->is_paid) {
+                Log::info('AnubPay callback: Billing already paid', [
+                    'billing_id' => $billingIdFromData,
+                    'type' => $type,
+                ]);
+                return true;
+            }
+
             // Mark billing as paid
             $billingService = new BillingService();
             $billingService->markAsPaid($billingIdFromData, $type, 'anubpay');
 
-            // Update payment log
+            // Update or create payment log
             $payment = BillingPayment::where('billing_id', $billingIdFromData)
                 ->where('billing_type', $type)
                 ->where('payment_method', 'anubpay')
@@ -209,13 +262,33 @@ class PaymentService
                     'paid_at' => now(),
                     'transaction_id' => $data['pid'] ?? $data['transaction_id'] ?? null,
                 ]);
+            } else {
+                // Create payment log if doesn't exist
+                BillingPayment::create([
+                    'billing_id' => $billingIdFromData,
+                    'billing_type' => $type,
+                    'payment_method' => 'anubpay',
+                    'transaction_id' => $data['pid'] ?? $data['transaction_id'] ?? null,
+                    'amount' => $billing->total_amount ?? $billing->amount,
+                    'currency' => $billing->currency->value ?? $billing->currency,
+                    'status' => 'paid',
+                    'paid_at' => now(),
+                ]);
             }
+
+            Log::info('AnubPay payment marked as paid', [
+                'billing_id' => $billingIdFromData,
+                'type' => $type,
+                'transaction_id' => $data['pid'] ?? $data['transaction_id'] ?? null,
+            ]);
 
             return true;
         } catch (\Exception $e) {
             Log::error('AnubPay webhook error', [
                 'error' => $e->getMessage(),
                 'data' => $data,
+                'billing_id' => $billingId,
+                'type' => $type,
             ]);
             return false;
         }

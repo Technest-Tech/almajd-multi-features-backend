@@ -99,13 +99,25 @@ class PaymentController extends Controller
         $billingType = $autoBilling ? 'auto' : 'manual';
 
         // Process PayPal payment
-        $this->paymentService->processPayPalCallback(
+        $success = $this->paymentService->processPayPalCallback(
             $request->all(),
             $billing->id,
             $billingType
         );
 
-        return redirect()->route('payment.success', ['token' => $token]);
+        if ($success) {
+            Log::info('PayPal payment processed successfully', [
+                'billing_id' => $billing->id,
+                'billing_type' => $billingType,
+            ]);
+            return redirect()->route('payment.success', ['token' => $token]);
+        }
+
+        Log::warning('PayPal payment processing failed', [
+            'billing_id' => $billing->id,
+            'billing_type' => $billingType,
+        ]);
+        return redirect()->route('payment.cancel');
     }
 
     /**
