@@ -28,59 +28,89 @@ class PaymentController extends Controller
      */
     public function show(string $token)
     {
-        // Find billing by token
-        $autoBilling = AutoBilling::where('payment_token', $token)->first();
-        $manualBilling = ManualBilling::where('payment_token', $token)->first();
+        try {
+            // Find billing by token
+            $autoBilling = AutoBilling::where('payment_token', $token)->first();
+            $manualBilling = ManualBilling::where('payment_token', $token)->first();
 
-        if (!$autoBilling && !$manualBilling) {
-            abort(404, 'Payment link not found');
+            if (!$autoBilling && !$manualBilling) {
+                Log::warning('Payment link not found', ['token' => $token]);
+                abort(404, 'Payment link not found');
+            }
+
+            $billing = $autoBilling ?? $manualBilling;
+            $billingType = $autoBilling ? 'auto' : 'manual';
+
+            // Check if already paid
+            if ($billing->is_paid) {
+                return redirect()->route('payment.success', ['token' => $token]);
+            }
+
+            // Get payment settings
+            $paypalEnabled = PaymentSettings::getSetting('paypal_enabled', '1');
+            $anubpayEnabled = PaymentSettings::getSetting('anubpay_enabled', '0');
+
+            // Get student/user info
+            if ($billingType === 'auto') {
+                $user = $autoBilling->student;
+                if (!$user) {
+                    Log::error('Auto billing student not found', [
+                        'billing_id' => $autoBilling->id,
+                        'student_id' => $autoBilling->student_id,
+                        'token' => $token,
+                    ]);
+                    abort(404, 'Student not found for this billing');
+                }
+                $amount = $autoBilling->total_amount;
+                $month = $autoBilling->month;
+                $year = $autoBilling->year;
+                $billingId = $autoBilling->id;
+            } else {
+                // Get first student from manual billing
+                $studentIds = $manualBilling->student_ids ?? [];
+                if (empty($studentIds) || !is_array($studentIds)) {
+                    Log::error('Manual billing has no students', [
+                        'billing_id' => $manualBilling->id,
+                        'token' => $token,
+                        'student_ids' => $studentIds,
+                    ]);
+                    abort(404, 'No students found for this billing');
+                }
+                $user = User::find($studentIds[0]);
+                if (!$user) {
+                    Log::error('Manual billing student not found', [
+                        'billing_id' => $manualBilling->id,
+                        'student_id' => $studentIds[0],
+                        'token' => $token,
+                    ]);
+                    abort(404, 'Student not found for this billing');
+                }
+                $amount = $manualBilling->amount;
+                $month = 'custom';
+                $year = null;
+                $billingId = $manualBilling->id;
+            }
+
+            return view('payments.show', compact(
+                'billing',
+                'billingType',
+                'user',
+                'amount',
+                'month',
+                'year',
+                'billingId',
+                'paypalEnabled',
+                'anubpayEnabled',
+                'token'
+            ));
+        } catch (\Exception $e) {
+            Log::error('Payment page error', [
+                'token' => $token,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            abort(500, 'An error occurred while loading the payment page. Please try again later.');
         }
-
-        $billing = $autoBilling ?? $manualBilling;
-        $billingType = $autoBilling ? 'auto' : 'manual';
-
-        // Check if already paid
-        if ($billing->is_paid) {
-            return redirect()->route('payment.success', ['token' => $token]);
-        }
-
-        // Get payment settings
-        $paypalEnabled = PaymentSettings::getSetting('paypal_enabled', '1');
-        $anubpayEnabled = PaymentSettings::getSetting('anubpay_enabled', '0');
-
-        // Get student/user info
-        if ($billingType === 'auto') {
-            $user = $autoBilling->student;
-            $amount = $autoBilling->total_amount;
-            $month = $autoBilling->month;
-            $year = $autoBilling->year;
-            $billingId = $autoBilling->id;
-        } else {
-            // Get first student from manual billing
-            $studentIds = $manualBilling->student_ids ?? [];
-            $user = !empty($studentIds) ? User::find($studentIds[0]) : null;
-            $amount = $manualBilling->amount;
-            $month = 'custom';
-            $year = null;
-            $billingId = $manualBilling->id;
-        }
-        
-        if (!$user) {
-            abort(404, 'User not found');
-        }
-
-        return view('payments.show', compact(
-            'billing',
-            'billingType',
-            'user',
-            'amount',
-            'month',
-            'year',
-            'billingId',
-            'paypalEnabled',
-            'anubpayEnabled',
-            'token'
-        ));
     }
 
     /**
