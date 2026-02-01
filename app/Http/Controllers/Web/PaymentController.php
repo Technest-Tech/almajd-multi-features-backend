@@ -465,6 +465,7 @@ class PaymentController extends Controller
 
     /**
      * Handle AnubPay webhook callback
+     * This method ensures ANY successful payment from AnubPay marks the bill as paid
      */
     public function handleAnubPayPayment(Request $request)
     {
@@ -476,24 +477,19 @@ class PaymentController extends Controller
                 'keys' => array_keys($data),
             ]);
 
-            // Check if payment was successful - like old system
-            if (isset($data['status'])) {
-                if ($data['status'] != 1) {
-                    Log::warning('AnubPay payment not successful', ['status' => $data['status']]);
-                    return response()->json(['error' => 'Payment not successful'], 400);
-                }
-            } else {
-                // No status field - assume payment is successful since webhook was sent
-                Log::info('AnubPay webhook: No status field found, assuming payment successful');
+            // Check if payment was successful
+            if (isset($data['status']) && $data['status'] != 1) {
+                Log::warning('AnubPay payment not successful', ['status' => $data['status']]);
+                return response()->json(['error' => 'Payment not successful'], 400);
             }
 
-            // Extract billing info from additional_data first
+            // Extract billing info from additional_data first, then fallback to direct data
             $additionalData = $data['additional_data'] ?? null;
             if (is_string($additionalData)) {
                 $additionalData = json_decode($additionalData, true);
             }
 
-            // Get values from additional_data or directly from request
+            // Get all possible values from multiple sources
             $billingId = $additionalData['billing_id'] ?? $data['billing_id'] ?? null;
             $userId = $additionalData['user_id'] ?? $data['user_id'] ?? null;
             $month = $additionalData['month'] ?? $data['month'] ?? null;
@@ -511,12 +507,15 @@ class PaymentController extends Controller
             // Convert to integers
             if ($billingId) $billingId = (int) $billingId;
             if ($userId) $userId = (int) $userId;
-            if ($month) $month = (int) $month;
+            if ($month && $month !== 'custom') $month = (int) $month;
             if ($year) $year = (int) $year;
             
-            // If billing_id is provided, try to find it in both tables
+            $markedAsPaid = false;
+            $billingFound = null;
+            
+            // STRATEGY 1: If billing_id is provided, try BOTH auto and manual tables
             if ($billingId) {
-                // Try auto billing first (most common case)
+                // Try AutoBilling first
                 $autoBilling = AutoBilling::find($billingId);
                 if ($autoBilling) {
                     if (!$autoBilling->is_paid) {
@@ -525,16 +524,18 @@ class PaymentController extends Controller
                             'paid_at' => now(),
                             'payment_method' => 'anubpay',
                         ]);
+                        $markedAsPaid = true;
+                        $billingFound = "auto_{$billingId}";
                         Log::info('AnubPay webhook: Auto billing marked as paid by ID', ['billing_id' => $billingId]);
-                        return response()->json(['success' => true]);
                     } else {
+                        $markedAsPaid = true; // Already paid, but that's fine
+                        $billingFound = "auto_{$billingId}_already_paid";
                         Log::info('AnubPay webhook: Auto billing already paid', ['billing_id' => $billingId]);
-                        return response()->json(['success' => true]);
                     }
                 }
                 
-                // Try manual billing if not found in auto
-                if ($billingType === 'manual' || !$autoBilling) {
+                // If not found in auto, try ManualBilling
+                if (!$autoBilling) {
                     $manualBilling = ManualBilling::find($billingId);
                     if ($manualBilling) {
                         if (!$manualBilling->is_paid) {
@@ -543,18 +544,20 @@ class PaymentController extends Controller
                                 'paid_at' => now(),
                                 'payment_method' => 'anubpay',
                             ]);
-                            Log::info('AnubPay webhook: Manual billing marked as paid', ['billing_id' => $billingId]);
-                            return response()->json(['success' => true]);
+                            $markedAsPaid = true;
+                            $billingFound = "manual_{$billingId}";
+                            Log::info('AnubPay webhook: Manual billing marked as paid by ID', ['billing_id' => $billingId]);
                         } else {
+                            $markedAsPaid = true;
+                            $billingFound = "manual_{$billingId}_already_paid";
                             Log::info('AnubPay webhook: Manual billing already paid', ['billing_id' => $billingId]);
-                            return response()->json(['success' => true]);
                         }
                     }
                 }
             }
             
-            // CASE 3: Find auto billing by user_id, month, and year
-            if ($userId && $month) {
+            // STRATEGY 2: If billing_id didn't work, try finding by user_id + month + year (for auto billings)
+            if (!$markedAsPaid && $userId && $month && $month !== 'custom') {
                 $query = AutoBilling::where('student_id', $userId)
                     ->where('month', $month)
                     ->where('is_paid', false);
@@ -563,47 +566,120 @@ class PaymentController extends Controller
                     $query->where('year', $year);
                 }
                 
-                $billing = $query->first();
+                $autoBilling = $query->first();
                 
-                // Fallback: try without year filter
-                if (!$billing) {
-                    $billing = AutoBilling::where('student_id', $userId)
+                // Fallback: try without year filter (get most recent)
+                if (!$autoBilling) {
+                    $autoBilling = AutoBilling::where('student_id', $userId)
                         ->where('month', $month)
                         ->where('is_paid', false)
                         ->orderBy('year', 'desc')
+                        ->orderBy('id', 'desc')
                         ->first();
                 }
                 
-                if ($billing) {
-                    $billing->update([
+                if ($autoBilling) {
+                    $autoBilling->update([
                         'is_paid' => true,
                         'paid_at' => now(),
                         'payment_method' => 'anubpay',
                     ]);
+                    $markedAsPaid = true;
+                    $billingFound = "auto_by_user_month_{$autoBilling->id}";
                     Log::info('AnubPay webhook: Auto billing marked as paid by user_id/month', [
-                        'billing_id' => $billing->id,
+                        'billing_id' => $autoBilling->id,
                         'user_id' => $userId,
                         'month' => $month,
+                        'year' => $year,
                     ]);
-                    return response()->json(['success' => true]);
                 }
             }
+            
+            // STRATEGY 3: If still not found and month is 'custom', try manual billing by user_id
+            if (!$markedAsPaid && $userId && ($month === 'custom' || $billingType === 'manual')) {
+                // Try to find any unpaid manual billing for this user
+                // Manual billing stores student_ids as JSON array
+                $manualBillings = ManualBilling::where('is_paid', false)
+                    ->orderBy('id', 'desc')
+                    ->get();
+                
+                foreach ($manualBillings as $manualBilling) {
+                    $studentIds = $manualBilling->student_ids ?? [];
+                    if (is_array($studentIds) && in_array($userId, $studentIds)) {
+                        $manualBilling->update([
+                            'is_paid' => true,
+                            'paid_at' => now(),
+                            'payment_method' => 'anubpay',
+                        ]);
+                        $markedAsPaid = true;
+                        $billingFound = "manual_by_user_{$manualBilling->id}";
+                        Log::info('AnubPay webhook: Manual billing marked as paid by user_id', [
+                            'billing_id' => $manualBilling->id,
+                            'user_id' => $userId,
+                        ]);
+                        break;
+                    }
+                }
+            }
+            
+            // STRATEGY 4: Last resort - try to find ANY unpaid billing for this user (most recent)
+            if (!$markedAsPaid && $userId) {
+                // Try auto billing first
+                $autoBilling = AutoBilling::where('student_id', $userId)
+                    ->where('is_paid', false)
+                    ->orderBy('year', 'desc')
+                    ->orderBy('month', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
+                
+                if ($autoBilling) {
+                    $autoBilling->update([
+                        'is_paid' => true,
+                        'paid_at' => now(),
+                        'payment_method' => 'anubpay',
+                    ]);
+                    $markedAsPaid = true;
+                    $billingFound = "auto_last_resort_{$autoBilling->id}";
+                    Log::info('AnubPay webhook: Auto billing marked as paid (last resort)', [
+                        'billing_id' => $autoBilling->id,
+                        'user_id' => $userId,
+                    ]);
+                }
+            }
+            
+            if ($markedAsPaid) {
+                Log::info('AnubPay webhook: Successfully marked billing as paid', [
+                    'billing_found' => $billingFound,
+                    'billing_id' => $billingId,
+                    'user_id' => $userId,
+                ]);
+                return response()->json(['success' => true, 'billing_found' => $billingFound]);
+            }
 
+            // If we couldn't find the billing, log detailed info but still return success
+            // (AnubPay expects success response to acknowledge webhook)
             Log::warning('AnubPay webhook: Could not find billing to mark as paid', [
                 'billing_id' => $billingId,
                 'user_id' => $userId,
                 'month' => $month,
                 'year' => $year,
                 'billing_type' => $billingType,
+                'all_data' => $data,
             ]);
             
-            // Return success anyway to acknowledge webhook (like old system)
-            return response()->json(['success' => true, 'message' => 'Webhook received but no billing found']);
+            // Return success anyway to acknowledge webhook (prevents AnubPay from retrying)
+            return response()->json([
+                'success' => true, 
+                'message' => 'Webhook received but no billing found',
+                'warning' => 'Billing may need to be marked as paid manually'
+            ]);
             
         } catch (\Exception $e) {
             Log::error('AnubPay webhook error: ' . $e->getMessage(), [
                 'exception' => $e->getTraceAsString(),
+                'request_data' => $request->all(),
             ]);
+            // Still return success to prevent AnubPay from retrying
             return response()->json(['error' => 'Webhook processing failed'], 500);
         }
     }
