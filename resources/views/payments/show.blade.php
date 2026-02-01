@@ -687,6 +687,7 @@ document.getElementById('anubpay-button').addEventListener('click', function() {
             amount: {{ $amount }},
             currency: '{{ $billing->currency instanceof \App\Enums\Currency ? $billing->currency->value : $billing->currency }}',
             month: '{{ $month }}',
+            year: {{ $year ?? 'null' }},
             billing_id: {{ $billingId }},
             billing_type: '{{ $billingType }}',
             description: '{{ $billingType === "auto" ? "Payment for {$month}/{$year} billing" : "Custom billing payment" }} - {{ $user->name ?? "Customer" }}'

@@ -378,7 +378,8 @@ class PaymentController extends Controller
                 $request->input('currency'),
                 $request->input('month'),
                 $request->input('billing_id'),
-                $request->input('billing_type')
+                $request->input('billing_type'),
+                $request->input('year') // Add year for auto billings
             );
 
             if ($result['success']) {
@@ -428,6 +429,9 @@ class PaymentController extends Controller
             }
 
             $billingId = $additionalData['billing_id'] ?? $data['billing_id'] ?? null;
+            $userId = $additionalData['user_id'] ?? $data['user_id'] ?? null;
+            $month = $additionalData['month'] ?? $data['month'] ?? null;
+            $year = $additionalData['year'] ?? $data['year'] ?? null;
             
             // Determine billing type: if billing_id is provided, it's manual; otherwise auto
             $billingType = $additionalData['billing_type'] ?? $data['billing_type'] ?? null;
@@ -436,8 +440,38 @@ class PaymentController extends Controller
                 $billingType = $billingId ? 'manual' : 'auto';
             }
 
+            // For auto billings, we can find by user_id, month, and year if billing_id is not provided
+            if ($billingType === 'auto' && !$billingId && $userId && $month) {
+                // Find auto billing by user_id, month, and year
+                $query = AutoBilling::where('student_id', (int) $userId)
+                    ->where('month', (int) $month);
+                
+                if ($year) {
+                    $query->where('year', (int) $year);
+                }
+                
+                $autoBilling = $query->first();
+                
+                // If not found with year, try without year (fallback for old payments)
+                if (!$autoBilling && $userId && $month) {
+                    $autoBilling = AutoBilling::where('student_id', (int) $userId)
+                        ->where('month', (int) $month)
+                        ->orderBy('year', 'desc') // Get the most recent one
+                        ->first();
+                }
+                
+                if ($autoBilling) {
+                    $billingId = $autoBilling->id;
+                }
+            }
+
             if (!$billingId) {
-                Log::warning('AnubPay webhook: No billing_id found');
+                Log::warning('AnubPay webhook: No billing_id found and could not find auto billing', [
+                    'user_id' => $userId,
+                    'month' => $month,
+                    'year' => $year,
+                    'billing_type' => $billingType,
+                ]);
                 return response()->json(['error' => 'No billing_id found'], 400);
             }
 

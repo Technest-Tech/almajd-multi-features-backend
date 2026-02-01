@@ -202,7 +202,7 @@ class PaymentService
     /**
      * Create AnubPay payment
      */
-    public function createAnubPayPayment(int $userId, float $amount, string $currency, string $month, ?int $billingId = null, string $type = 'auto'): array
+    public function createAnubPayPayment(int $userId, float $amount, string $currency, string $month, ?int $billingId = null, string $type = 'auto', ?int $year = null): array
     {
         try {
             $client = new Client();
@@ -219,6 +219,11 @@ class PaymentService
                 'method' => 'card,paypal',
                 'description' => "Payment for {$month} billing",
             ];
+            
+            // Add year for auto billings
+            if ($type === 'auto' && $year) {
+                $data['year'] = $year;
+            }
 
             $response = $client->post($url, [
                 'headers' => [
@@ -288,23 +293,72 @@ class PaymentService
 
             $userId = $additionalData['user_id'] ?? $data['user_id'] ?? null;
             $month = $additionalData['month'] ?? $data['month'] ?? null;
+            $year = $additionalData['year'] ?? $data['year'] ?? null;
             $billingIdFromData = $additionalData['billing_id'] ?? $data['billing_id'] ?? $billingId;
             
-            // Convert billing_id to integer if it's a string
-            $billingIdFromData = (int) $billingIdFromData;
+            // Convert to integers
+            if ($userId) {
+                $userId = (int) $userId;
+            }
+            if ($month) {
+                $month = (int) $month;
+            }
+            if ($year) {
+                $year = (int) $year;
+            }
+            if ($billingIdFromData) {
+                $billingIdFromData = (int) $billingIdFromData;
+            }
 
-            // Check if billing exists
-            $billing = $type === 'auto' 
-                ? AutoBilling::find($billingIdFromData)
-                : ManualBilling::find($billingIdFromData);
+            // Find billing based on type
+            if ($type === 'auto') {
+                if ($billingIdFromData) {
+                    // If billing_id is provided, use it
+                    $billing = AutoBilling::find($billingIdFromData);
+                } elseif ($userId && $month) {
+                    // Otherwise, find by user_id, month, and year
+                    $query = AutoBilling::where('student_id', $userId)
+                        ->where('month', $month);
+                    
+                    if ($year) {
+                        $query->where('year', $year);
+                    }
+                    
+                    $billing = $query->first();
+                    
+                    // If not found with year, try without year (fallback for old payments)
+                    if (!$billing && $userId && $month) {
+                        Log::warning('AnubPay callback: Auto billing not found with year, trying without year', [
+                            'user_id' => $userId,
+                            'month' => $month,
+                            'year' => $year,
+                        ]);
+                        $billing = AutoBilling::where('student_id', $userId)
+                            ->where('month', $month)
+                            ->orderBy('year', 'desc') // Get the most recent one
+                            ->first();
+                    }
+                } else {
+                    $billing = null;
+                }
+            } else {
+                // Manual billing
+                $billing = $billingIdFromData ? ManualBilling::find($billingIdFromData) : null;
+            }
 
             if (!$billing) {
                 Log::warning('AnubPay callback: Billing not found', [
                     'billing_id' => $billingIdFromData,
                     'type' => $type,
+                    'user_id' => $userId,
+                    'month' => $month,
+                    'year' => $year,
                 ]);
                 return false;
             }
+            
+            // Update billingIdFromData to the found billing's ID
+            $billingIdFromData = $billing->id;
 
             // If already paid, return true (idempotent)
             if ($billing->is_paid) {
