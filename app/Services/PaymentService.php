@@ -251,6 +251,14 @@ class PaymentService
                 $data['customer_phone'] = $customerPhone;
             }
             
+            // Add customer data to additional_data for webhook (like old system)
+            if ($customerName || $customerEmail || $customerPhone) {
+                $additionalData['customer_name'] = $customerName;
+                $additionalData['customer_email'] = $customerEmail;
+                $additionalData['customer_phone'] = $customerPhone;
+                $data['additional_data'] = json_encode($additionalData);
+            }
+            
             // Add year for auto billings
             if ($type === 'auto' && $year) {
                 $data['year'] = $year;
