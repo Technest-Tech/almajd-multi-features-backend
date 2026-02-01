@@ -118,15 +118,29 @@ class PaymentController extends Controller
      */
     public function paypalSuccess(Request $request, string $token)
     {
+        Log::info('PayPal success callback received', [
+            'token' => $token,
+            'request_data' => $request->all(),
+        ]);
+
         $autoBilling = AutoBilling::where('payment_token', $token)->first();
         $manualBilling = ManualBilling::where('payment_token', $token)->first();
 
         if (!$autoBilling && !$manualBilling) {
+            Log::warning('PayPal success: Billing not found', ['token' => $token]);
             abort(404);
         }
 
         $billing = $autoBilling ?? $manualBilling;
         $billingType = $autoBilling ? 'auto' : 'manual';
+
+        Log::info('PayPal success: Processing payment', [
+            'billing_id' => $billing->id,
+            'billing_type' => $billingType,
+            'is_paid' => $billing->is_paid,
+            'paymentId' => $request->input('paymentId'),
+            'transaction_id' => $request->input('transaction_id'),
+        ]);
 
         // Process PayPal payment
         $success = $this->paymentService->processPayPalCallback(
@@ -399,6 +413,9 @@ class PaymentController extends Controller
             'month' => 'required|string',
             'billing_id' => 'nullable|integer',
             'billing_type' => 'required|string|in:auto,manual',
+            'customer_name' => 'nullable|string',
+            'customer_email' => 'nullable|email',
+            'customer_phone' => 'nullable|string',
         ]);
 
         try {
@@ -409,7 +426,10 @@ class PaymentController extends Controller
                 $request->input('month'),
                 $request->input('billing_id'),
                 $request->input('billing_type'),
-                $request->input('year') // Add year for auto billings
+                $request->input('year'),
+                $request->input('customer_name'),
+                $request->input('customer_email'),
+                $request->input('customer_phone')
             );
 
             if ($result['success']) {
@@ -418,6 +438,7 @@ class PaymentController extends Controller
                     'user_id' => $request->input('user_id'),
                     'amount' => $request->input('amount'),
                     'month' => $request->input('month'),
+                    'year' => $request->input('year'),
                     'billing_id' => $request->input('billing_id'),
                     'billing_type' => $request->input('billing_type'),
                     'pid' => $result['pid'] ?? null,
@@ -450,78 +471,128 @@ class PaymentController extends Controller
         try {
             $data = $request->all();
             
-            Log::info('AnubPay webhook received', ['data' => $data]);
+            Log::info('AnubPay webhook received', [
+                'data' => $data,
+                'keys' => array_keys($data),
+            ]);
 
-            // Extract billing info
+            // Check if payment was successful - like old system
+            if (isset($data['status'])) {
+                if ($data['status'] != 1) {
+                    Log::warning('AnubPay payment not successful', ['status' => $data['status']]);
+                    return response()->json(['error' => 'Payment not successful'], 400);
+                }
+            } else {
+                // No status field - assume payment is successful since webhook was sent
+                Log::info('AnubPay webhook: No status field found, assuming payment successful');
+            }
+
+            // Extract billing info from additional_data first
             $additionalData = $data['additional_data'] ?? null;
             if (is_string($additionalData)) {
                 $additionalData = json_decode($additionalData, true);
             }
 
+            // Get values from additional_data or directly from request
             $billingId = $additionalData['billing_id'] ?? $data['billing_id'] ?? null;
             $userId = $additionalData['user_id'] ?? $data['user_id'] ?? null;
             $month = $additionalData['month'] ?? $data['month'] ?? null;
             $year = $additionalData['year'] ?? $data['year'] ?? null;
-            
-            // Determine billing type: if billing_id is provided, it's manual; otherwise auto
             $billingType = $additionalData['billing_type'] ?? $data['billing_type'] ?? null;
-            if (!$billingType) {
-                // If billing_id is provided, it's manual billing; otherwise auto
-                $billingType = $billingId ? 'manual' : 'auto';
+            
+            Log::info('AnubPay webhook: Extracted data', [
+                'billing_id' => $billingId,
+                'user_id' => $userId,
+                'month' => $month,
+                'year' => $year,
+                'billing_type' => $billingType,
+            ]);
+            
+            // Convert to integers
+            if ($billingId) $billingId = (int) $billingId;
+            if ($userId) $userId = (int) $userId;
+            if ($month) $month = (int) $month;
+            if ($year) $year = (int) $year;
+            
+            // CASE 1: Manual billing with billing_id
+            if ($billingId && $billingType === 'manual') {
+                $billing = ManualBilling::find($billingId);
+                if ($billing && !$billing->is_paid) {
+                    $billing->update([
+                        'is_paid' => true,
+                        'paid_at' => now(),
+                        'payment_method' => 'anubpay',
+                    ]);
+                    Log::info('AnubPay webhook: Manual billing marked as paid', ['billing_id' => $billingId]);
+                    return response()->json(['success' => true]);
+                }
             }
-
-            // For auto billings, we can find by user_id, month, and year if billing_id is not provided
-            if ($billingType === 'auto' && !$billingId && $userId && $month) {
-                // Find auto billing by user_id, month, and year
-                $query = AutoBilling::where('student_id', (int) $userId)
-                    ->where('month', (int) $month);
+            
+            // CASE 2: Auto billing with billing_id
+            if ($billingId && ($billingType === 'auto' || !$billingType)) {
+                $billing = AutoBilling::find($billingId);
+                if ($billing && !$billing->is_paid) {
+                    $billing->update([
+                        'is_paid' => true,
+                        'paid_at' => now(),
+                        'payment_method' => 'anubpay',
+                    ]);
+                    Log::info('AnubPay webhook: Auto billing marked as paid by ID', ['billing_id' => $billingId]);
+                    return response()->json(['success' => true]);
+                }
+            }
+            
+            // CASE 3: Find auto billing by user_id, month, and year
+            if ($userId && $month) {
+                $query = AutoBilling::where('student_id', $userId)
+                    ->where('month', $month)
+                    ->where('is_paid', false);
                 
                 if ($year) {
-                    $query->where('year', (int) $year);
+                    $query->where('year', $year);
                 }
                 
-                $autoBilling = $query->first();
+                $billing = $query->first();
                 
-                // If not found with year, try without year (fallback for old payments)
-                if (!$autoBilling && $userId && $month) {
-                    $autoBilling = AutoBilling::where('student_id', (int) $userId)
-                        ->where('month', (int) $month)
-                        ->orderBy('year', 'desc') // Get the most recent one
+                // Fallback: try without year filter
+                if (!$billing) {
+                    $billing = AutoBilling::where('student_id', $userId)
+                        ->where('month', $month)
+                        ->where('is_paid', false)
+                        ->orderBy('year', 'desc')
                         ->first();
                 }
                 
-                if ($autoBilling) {
-                    $billingId = $autoBilling->id;
+                if ($billing) {
+                    $billing->update([
+                        'is_paid' => true,
+                        'paid_at' => now(),
+                        'payment_method' => 'anubpay',
+                    ]);
+                    Log::info('AnubPay webhook: Auto billing marked as paid by user_id/month', [
+                        'billing_id' => $billing->id,
+                        'user_id' => $userId,
+                        'month' => $month,
+                    ]);
+                    return response()->json(['success' => true]);
                 }
             }
 
-            if (!$billingId) {
-                Log::warning('AnubPay webhook: No billing_id found and could not find auto billing', [
-                    'user_id' => $userId,
-                    'month' => $month,
-                    'year' => $year,
-                    'billing_type' => $billingType,
-                ]);
-                return response()->json(['error' => 'No billing_id found'], 400);
-            }
-
-            // Convert billing_id to integer if it's a string
-            $billingId = (int) $billingId;
-
-            // Process payment
-            $success = $this->paymentService->processAnubPayCallback(
-                $data,
-                $billingId,
-                $billingType
-            );
-
-            if ($success) {
-                return response()->json(['success' => true]);
-            }
-
-            return response()->json(['error' => 'Payment processing failed'], 400);
+            Log::warning('AnubPay webhook: Could not find billing to mark as paid', [
+                'billing_id' => $billingId,
+                'user_id' => $userId,
+                'month' => $month,
+                'year' => $year,
+                'billing_type' => $billingType,
+            ]);
+            
+            // Return success anyway to acknowledge webhook (like old system)
+            return response()->json(['success' => true, 'message' => 'Webhook received but no billing found']);
+            
         } catch (\Exception $e) {
-            Log::error('AnubPay webhook error: ' . $e->getMessage());
+            Log::error('AnubPay webhook error: ' . $e->getMessage(), [
+                'exception' => $e->getTraceAsString(),
+            ]);
             return response()->json(['error' => 'Webhook processing failed'], 500);
         }
     }
@@ -533,33 +604,56 @@ class PaymentController extends Controller
     {
         $paymentData = Session::get('anubpay_payment');
 
+        Log::info('AnubPay success redirect', [
+            'month' => $month,
+            'payment_data' => $paymentData,
+        ]);
+
         if (!$paymentData) {
+            Log::warning('AnubPay success: No session data found');
             return redirect()->route('payment.cancel');
         }
 
         // Mark billing as paid
-        if ($paymentData['billing_type'] === 'manual') {
+        if (($paymentData['billing_type'] ?? '') === 'manual') {
             $billing = ManualBilling::find($paymentData['billing_id']);
-            if ($billing) {
+            if ($billing && !$billing->is_paid) {
                 $billing->update([
                     'is_paid' => true,
                     'paid_at' => now(),
                     'payment_method' => 'anubpay',
                 ]);
+                Log::info('AnubPay success: Manual billing marked as paid', ['billing_id' => $billing->id]);
             }
             Session::forget('anubpay_payment');
             return redirect()->route('payment.success', ['token' => $billing->payment_token ?? '']);
         } else {
-            $billing = AutoBilling::where('student_id', $paymentData['user_id'])
-                ->where('month', $paymentData['month'])
-                ->first();
+            // Auto billing - find by user_id, month, and optionally year
+            $query = AutoBilling::where('student_id', $paymentData['user_id'])
+                ->where('month', $paymentData['month']);
             
-            if ($billing) {
+            // Add year filter if available
+            if (!empty($paymentData['year'])) {
+                $query->where('year', $paymentData['year']);
+            }
+            
+            $billing = $query->first();
+            
+            // Fallback: try without year if not found
+            if (!$billing && !empty($paymentData['user_id']) && !empty($paymentData['month'])) {
+                $billing = AutoBilling::where('student_id', $paymentData['user_id'])
+                    ->where('month', $paymentData['month'])
+                    ->orderBy('year', 'desc')
+                    ->first();
+            }
+            
+            if ($billing && !$billing->is_paid) {
                 $billing->update([
                     'is_paid' => true,
                     'paid_at' => now(),
                     'payment_method' => 'anubpay',
                 ]);
+                Log::info('AnubPay success: Auto billing marked as paid', ['billing_id' => $billing->id]);
             }
             Session::forget('anubpay_payment');
             return redirect()->route('payment.success', ['token' => $billing->payment_token ?? '']);
