@@ -202,28 +202,69 @@ class PaymentService
     /**
      * Create AnubPay payment
      */
-    public function createAnubPayPayment(int $userId, float $amount, string $currency, string $month, ?int $billingId = null, string $type = 'auto', ?int $year = null): array
+    public function createAnubPayPayment(int $userId, float $amount, string $currency, string $month, ?int $billingId = null, string $type = 'auto', ?int $year = null, ?string $customerName = null, ?string $customerEmail = null, ?string $customerPhone = null): array
     {
         try {
             $client = new Client();
             $url = config('payments.anubpay.api_url');
 
-            $data = [
-                'token' => config('payments.anubpay.token'),
-                'title' => "Billing for month {$month}",
-                'amount' => $amount,
-                'currency' => $currency,
-                'billing_id' => $billingId,
+            // Build title with customer name like old system
+            $title = $customerName 
+                ? "{$customerName} - bill for month {$month}" 
+                : "Billing for month {$month}";
+
+            // Build additional_data JSON for AnubPay to send back in webhook
+            $additionalData = [
                 'user_id' => $userId,
                 'month' => $month,
+                'billing_id' => $billingId,
+                'billing_type' => $type,
+            ];
+            if ($type === 'auto' && $year) {
+                $additionalData['year'] = $year;
+            }
+
+            $data = [
+                'token' => config('payments.anubpay.token'),
+                'title' => $title,
+                'amount' => $amount,
+                'currency' => $currency,
                 'method' => 'card,paypal',
                 'description' => "Payment for {$month} billing",
+                // Include data directly for fallback
+                'billing_id' => $billingId,
+                'billing_type' => $type,
+                'user_id' => $userId,
+                'month' => $month,
+                // Include additional_data as JSON string for AnubPay webhook
+                'additional_data' => json_encode($additionalData),
             ];
+            
+            // Add customer data if provided
+            if ($customerName) {
+                $data['customer_name'] = $customerName;
+            }
+            if ($customerEmail) {
+                $data['customer_email'] = $customerEmail;
+            }
+            if ($customerPhone) {
+                $data['customer_phone'] = $customerPhone;
+            }
             
             // Add year for auto billings
             if ($type === 'auto' && $year) {
                 $data['year'] = $year;
             }
+            
+            Log::info('Creating AnubPay payment', [
+                'user_id' => $userId,
+                'amount' => $amount,
+                'billing_id' => $billingId,
+                'billing_type' => $type,
+                'month' => $month,
+                'year' => $year,
+                'customer_name' => $customerName,
+            ]);
 
             $response = $client->post($url, [
                 'headers' => [

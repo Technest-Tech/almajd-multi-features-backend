@@ -653,12 +653,23 @@
         },
         onApprove: function(data, actions) {
             return actions.order.capture().then(function(details) {
-                window.location.href = '{{ url("/payment/" . $token . "/paypal/success") }}';
+                // Build redirect URL with PayPal order details
+                var successUrl = '{{ url("/payment/" . $token . "/paypal/success") }}';
+                var params = new URLSearchParams();
+                params.append('paymentId', data.orderID);
+                params.append('transaction_id', details.id || data.orderID);
+                params.append('payer_id', details.payer?.payer_id || data.payerID || '');
+                params.append('status', details.status || 'COMPLETED');
+                window.location.href = successUrl + '?' + params.toString();
             });
         },
         onError: function(err) {
             console.error('PayPal error:', err);
             alert('Payment failed. Please try again.');
+        },
+        onCancel: function(data) {
+            console.log('PayPal payment cancelled:', data);
+            alert('Payment was cancelled.');
         },
         style: {
             layout: 'vertical',
@@ -690,6 +701,9 @@ document.getElementById('anubpay-button').addEventListener('click', function() {
             year: {{ $year ?? 'null' }},
             billing_id: {{ $billingId }},
             billing_type: '{{ $billingType }}',
+            customer_name: '{{ $user->name ?? "" }}',
+            customer_email: '{{ $user->email ?? "" }}',
+            customer_phone: '{{ $user->whatsapp_number ?? $user->phone ?? "" }}',
             description: '{{ $billingType === "auto" ? "Payment for {$month}/{$year} billing" : "Custom billing payment" }} - {{ $user->name ?? "Customer" }}'
         })
     })
