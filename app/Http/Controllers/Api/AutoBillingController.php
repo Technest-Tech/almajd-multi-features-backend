@@ -212,7 +212,7 @@ class AutoBillingController extends Controller
             }
 
             // Dispatch jobs with delays to avoid rate limiting
-            // Each job will be delayed by 2 seconds from the previous one
+            // Each job will be delayed by 3 seconds from the previous one
             $delay = 0;
             foreach ($billings as $billing) {
                 // Skip if student is not loaded or doesn't exist
@@ -228,7 +228,7 @@ class AutoBillingController extends Controller
                     $batchId
                 )->delay(now()->addSeconds($delay));
                 
-                $delay += 2; // 2 seconds between each job to avoid WhatsApp rate limiting
+                $delay += 3; // 3 seconds between each job to avoid WhatsApp rate limiting
             }
 
             Log::info("Queued {$billings->count()} WhatsApp sending jobs for batch {$batchId}");
@@ -359,7 +359,7 @@ class AutoBillingController extends Controller
 
             $sent = 0;
             $failed = 0;
-            $delaySeconds = 2;
+            $delaySeconds = 3;
 
             foreach ($failedLogs as $oldLog) {
                 $billing = $oldLog->billing;
