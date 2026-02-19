@@ -7,43 +7,46 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsAppService
 {
-    private const API_URL = 'https://whatsapp.almajd.info/api/send-message';
-    private const API_KEY = 'wa_0930233a358c41b9a22588b86f0d8ff4';
-
     /**
-     * Send a WhatsApp message
+     * Send a WhatsApp message via Wasender API.
      *
-     * @param string $to Phone number in format: 201554134201@c.us
+     * @param string $to Phone number (e.g. 201554134201, +201554134201, or with @c.us / @s.whatsapp.net)
      * @param string $message Message content
      * @return array ['success' => bool, 'message' => string]
      */
     public function sendMessage(string $to, string $message): array
     {
+        $apiUrl = config('services.wasender.api_url', 'https://wasenderapi.com');
+        $apiKey = config('services.wasender.api_key');
+
+        if (empty($apiKey)) {
+            Log::error('WhatsApp (Wasender): WASENDER_API_KEY is not set in .env');
+            return [
+                'success' => false,
+                'message' => 'WhatsApp API key not configured',
+            ];
+        }
+
         try {
-            // Clean and format phone number
-            // Remove any existing @c.us suffix first
-            $to = str_replace('@c.us', '', $to);
-            
-            // Remove any non-digit characters (spaces, dashes, plus signs, etc.)
-            $to = preg_replace('/\D/', '', $to);
-            
-            // Ensure phone number has @c.us suffix
-            if (!empty($to)) {
-                $to = $to . '@c.us';
-            } else {
+            $to = $this->normalizeToJid($to);
+            if (empty($to)) {
                 return [
                     'success' => false,
                     'message' => 'Invalid phone number format',
                 ];
             }
 
+            $url = rtrim($apiUrl, '/') . '/api/send-message';
+
             $response = Http::withHeaders([
-                'X-API-Key' => self::API_KEY,
+                'Authorization' => 'Bearer ' . $apiKey,
                 'Content-Type' => 'application/json',
-            ])->post(self::API_URL, [
-                'to' => $to,
-                'message' => $message,
-            ]);
+            ])
+                ->timeout(30)
+                ->post($url, [
+                    'to' => $to,
+                    'text' => $message,
+                ]);
 
             if ($response->successful()) {
                 return [
@@ -53,18 +56,19 @@ class WhatsAppService
                 ];
             }
 
-            $errorMessage = $response->json()['message'] ?? 'Failed to send message';
-            Log::error('WhatsApp API Error', [
+            $body = $response->json();
+            $errorMessage = $body['message'] ?? $body['error'] ?? $response->body() ?: 'Failed to send message';
+            Log::error('Wasender API Error', [
                 'status' => $response->status(),
                 'response' => $response->body(),
             ]);
 
             return [
                 'success' => false,
-                'message' => $errorMessage,
+                'message' => is_string($errorMessage) ? $errorMessage : 'Failed to send message',
             ];
         } catch (\Exception $e) {
-            Log::error('WhatsApp Service Exception', [
+            Log::error('WhatsApp (Wasender) Service Exception', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -75,5 +79,18 @@ class WhatsAppService
             ];
         }
     }
-}
 
+    /**
+     * Normalize phone number to Wasender JID format.
+     * Wasender expects RECIPIENT_JID (e.g. 201234567890@s.whatsapp.net).
+     */
+    private function normalizeToJid(string $to): string
+    {
+        $to = str_replace(['@c.us', '@s.whatsapp.net'], '', $to);
+        $to = preg_replace('/\D/', '', $to);
+        if (empty($to)) {
+            return '';
+        }
+        return $to . '@s.whatsapp.net';
+    }
+}

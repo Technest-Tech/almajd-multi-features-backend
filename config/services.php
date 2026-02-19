@@ -39,4 +39,9 @@ return [
         'default_phone' => env('WHATSAPP_DEFAULT_PHONE', '201554134201'),
     ],
 
+    'wasender' => [
+        'api_url' => env('WASENDER_API_URL', 'https://wasenderapi.com'),
+        'api_key' => env('WASENDER_API_KEY'),
+    ],
+
 ];
