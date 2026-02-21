@@ -356,7 +356,7 @@ class CalendarController extends Controller
                 'start_time' => 'required|string',
                 'finish_time' => 'nullable|string',
                 'student_name' => 'required|string',
-                'country' => 'required|string|in:canada,uk',
+                'country' => 'required|string|in:canada,uk,eg',
                 'status' => 'nullable|string|in:active,inactive',
                 'reactive_date' => 'nullable|date',
                 'deleted_date' => 'nullable|date',
@@ -395,7 +395,7 @@ class CalendarController extends Controller
                 'start_time' => 'sometimes|string',
                 'finish_time' => 'nullable|string',
                 'student_name' => 'sometimes|string',
-                'country' => 'sometimes|string|in:canada,uk',
+                'country' => 'sometimes|string|in:canada,uk,eg',
                 'status' => 'sometimes|string|in:active,inactive',
                 'reactive_date' => 'nullable|date',
                 'deleted_date' => 'nullable|date',
@@ -672,7 +672,11 @@ class CalendarController extends Controller
                         ? Carbon::parse($entry->finish_time)->format('g:i A')
                         : '';
                     $timeRange = $endTime ? "$startTime - $endTime" : $startTime;
-                    $country = $entry->country == 'uk' ? '🇬🇧' : '🇨🇦';
+                    $country = match ($entry->country ?? '') {
+                        'uk' => '🇬🇧',
+                        'eg' => '🇪🇬',
+                        default => '🇨🇦',
+                    };
                     $message .= "   👤 {$entry->student_name} $country [$timeRange]\n";
                     $totalLessons++;
                 }
@@ -807,7 +811,11 @@ class CalendarController extends Controller
                         ? Carbon::parse($entry->finish_time)->format('h:i A')
                         : '';
                     $timeRange = $endTime ? "$startTime - $endTime" : $startTime;
-                    $country = $entry->country == 'uk' ? '🇬🇧' : '🇨🇦';
+                    $country = match ($entry->country ?? '') {
+                        'uk' => '🇬🇧',
+                        'eg' => '🇪🇬',
+                        default => '🇨🇦',
+                    };
                     $message .= "  • " . $entry->student_name . " $country [$timeRange]\n";
                     $totalLessons++;
                 }
