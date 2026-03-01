@@ -3,15 +3,26 @@
 namespace App\Services;
 
 use App\Models\Course;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class CourseService
 {
+    /**
+     * Current month date range for lesson counts (teacher app: all data is current month only).
+     */
+    private function currentMonthRange(): array
+    {
+        $now = Carbon::now();
+        return [$now->copy()->startOfMonth()->format('Y-m-d'), $now->copy()->endOfMonth()->format('Y-m-d')];
+    }
+
     public function getAll(array $filters = []): LengthAwarePaginator
     {
+        [$start, $end] = $this->currentMonthRange();
         $query = Course::with(['student', 'teacher'])
-            ->withCount('lessons');
+            ->withCount(['lessons' => fn ($q) => $q->whereBetween('date', [$start, $end])]);
 
         // Filter by student
         if (isset($filters['student_id'])) {
@@ -34,8 +45,9 @@ class CourseService
 
     public function getById(int $id): ?Course
     {
+        [$start, $end] = $this->currentMonthRange();
         return Course::with(['student', 'teacher'])
-            ->withCount('lessons')
+            ->withCount(['lessons' => fn ($q) => $q->whereBetween('date', [$start, $end])])
             ->find($id);
     }
 

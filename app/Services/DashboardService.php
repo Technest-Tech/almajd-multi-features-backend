@@ -8,7 +8,6 @@ use App\Models\Lesson;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class DashboardService
 {
@@ -87,54 +86,47 @@ class DashboardService
     public function getTeacherStats(int $teacherId): array
     {
         $teacher = User::findOrFail($teacherId);
-        
+
         if (!$teacher->isTeacher()) {
             throw new \InvalidArgumentException('User is not a teacher');
         }
 
-        $assignedStudentsCount = $teacher->assignedStudents()->count();
-
-        // Hours this month: current month only (dashboard resets every month)
+        // All stats: current month only
         $now = Carbon::now();
         $startOfCurrentMonth = $now->copy()->startOfMonth();
         $endOfCurrentMonth = $now->copy()->endOfMonth();
+        $dateRange = [$startOfCurrentMonth->format('Y-m-d'), $endOfCurrentMonth->format('Y-m-d')];
 
-        // Debug: Check if teacher has any courses
-        $coursesCount = Course::where('teacher_id', $teacherId)->count();
-
-        // Debug: Check if teacher has any lessons at all (without date filter)
-        $allLessonsCount = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
+        // Students who had at least one lesson with this teacher in current month
+        $assignedStudentsCount = (int) Lesson::query()
+            ->join('courses', 'lessons.course_id', '=', 'courses.id')
             ->where('courses.teacher_id', $teacherId)
+            ->whereBetween('lessons.date', $dateRange)
+            ->selectRaw('COUNT(DISTINCT courses.student_id) as cnt')
+            ->value('cnt');
+
+        // Courses that had at least one lesson in current month
+        $coursesCount = Course::where('teacher_id', $teacherId)
+            ->whereHas('lessons', fn ($q) => $q->whereBetween('date', $dateRange))
             ->count();
 
-        // Current month only: lessons between start and end of month
+        // Hours: current month only
         $totalMinutes = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
             ->where('courses.teacher_id', $teacherId)
-            ->whereBetween('lessons.date', [$startOfCurrentMonth->format('Y-m-d'), $endOfCurrentMonth->format('Y-m-d')])
+            ->whereBetween('lessons.date', $dateRange)
             ->whereNotNull('lessons.duration')
             ->sum('lessons.duration');
 
-        // Debug logging
-        Log::info("Teacher Stats Debug", [
-            'teacher_id' => $teacherId,
-            'courses_count' => $coursesCount,
-            'all_lessons_count' => $allLessonsCount,
-            'start_of_current_month' => $startOfCurrentMonth->format('Y-m-d'),
-            'end_of_current_month' => $endOfCurrentMonth->format('Y-m-d'),
-            'total_minutes' => $totalMinutes,
-        ]);
-
         $hoursThisMonth = ($totalMinutes ?? 0) / 60;
 
-        // Calculate profit for this month only
+        // Profit: current month only
         $totalProfit = 0;
-
         if ($teacher->hour_price !== null) {
             $totalProfit = $hoursThisMonth * (float) $teacher->hour_price;
         } else {
             $totalProfit = Lesson::join('courses', 'lessons.course_id', '=', 'courses.id')
                 ->where('courses.teacher_id', $teacherId)
-                ->whereBetween('lessons.date', [$startOfCurrentMonth->format('Y-m-d'), $endOfCurrentMonth->format('Y-m-d')])
+                ->whereBetween('lessons.date', $dateRange)
                 ->whereNotNull('lessons.duty')
                 ->sum('lessons.duty') ?? 0;
         }
