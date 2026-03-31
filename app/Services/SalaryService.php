@@ -118,10 +118,20 @@ class SalaryService
             // All teachers use EGP currency
             $currency = 'EGP';
 
+            $accountNumber = $teacher->account_number ?? null;
+            $bankName = $teacher->bank_name ?? null;
+            $paymentType = 'cash';
+            if (!empty($accountNumber) || !empty($bankName)) {
+                $paymentType = 'bank';
+            }
+
             $salaries[] = [
                 'teacher_id' => $teacher->id,
                 'teacher_name' => $teacher->name,
                 'teacher_email' => $teacher->email,
+                'account_number' => $accountNumber,
+                'bank_name' => $bankName,
+                'payment_type' => $paymentType,
                 'currency' => $currency,
                 'total_hours' => round($totalHours, 2),
                 'salary' => round($salary, 2),

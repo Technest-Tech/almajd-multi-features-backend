@@ -38,7 +38,8 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
         $data = collect($this->salaries)->map(function ($salary) {
             return [
                 $salary['teacher_name'] ?? '',
-                $salary['teacher_email'] ?? '',
+                $salary['account_number'] ?? '',
+                $salary['payment_type'] ?? '',
                 $salary['total_hours'] ?? 0,
                 $salary['lessons_count'] ?? 0,
                 $salary['currency'] ?? 'EGP',
@@ -62,6 +63,7 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
                 $currency,
                 '',
                 $total,
+                '',
             ]);
         }
 
@@ -72,7 +74,8 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
     {
         return [
             'اسم المعلم',
-            'البريد الإلكتروني',
+            'رقم الحساب',
+            'نوع الدفع',
             'إجمالي الساعات',
             'عدد الدروس',
             'العملة',
@@ -84,7 +87,7 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
     public function styles(Worksheet $sheet)
     {
         // Style header row
-        $sheet->getStyle('A1:G1')->applyFromArray([
+        $sheet->getStyle('A1:H1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 12,
@@ -104,7 +107,7 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
         $salaryCount = count($this->salaries);
         if ($salaryCount > 0) {
             $lastDataRow = $salaryCount + 1; // +1 for header row
-            $sheet->getStyle('A2:G' . $lastDataRow)->applyFromArray([
+            $sheet->getStyle('A2:H' . $lastDataRow)->applyFromArray([
                 'borders' => [
                     'allBorders' => [
                         'borderStyle' => Border::BORDER_THIN,
@@ -123,7 +126,7 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
                 $rowIndex = 0;
                 foreach ($this->totalsByCurrency as $currency => $total) {
                     $row = $totalStartRow + $rowIndex;
-                    $sheet->getStyle("A$row:G$row")->applyFromArray([
+                    $sheet->getStyle("A$row:H$row")->applyFromArray([
                         'font' => [
                             'bold' => true,
                             'size' => 11,
@@ -158,12 +161,13 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
     {
         return [
             'A' => 25, // Teacher name
-            'B' => 30, // Email
-            'C' => 15, // Total hours
-            'D' => 12, // Lessons count
-            'E' => 10, // Currency
-            'F' => 15, // Hour price
-            'G' => 15, // Salary
+            'B' => 22, // Account number
+            'C' => 14, // Payment type
+            'D' => 15, // Total hours
+            'E' => 12, // Lessons count
+            'F' => 10, // Currency
+            'G' => 15, // Hour price
+            'H' => 15, // Salary
         ];
     }
 }
