@@ -39,7 +39,7 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
             return [
                 $salary['teacher_name'] ?? '',
                 $salary['account_number'] ?? '',
-                $salary['payment_type'] ?? '',
+                $salary['bank_name'] ?? '',
                 $salary['total_hours'] ?? 0,
                 $salary['lessons_count'] ?? 0,
                 $salary['currency'] ?? 'EGP',
@@ -75,7 +75,7 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
         return [
             'اسم المعلم',
             'رقم الحساب',
-            'نوع الدفع',
+            'اسم البنك',
             'إجمالي الساعات',
             'عدد الدروس',
             'العملة',
@@ -162,7 +162,7 @@ class SalariesExport implements FromCollection, WithHeadings, WithStyles, WithTi
         return [
             'A' => 25, // Teacher name
             'B' => 22, // Account number
-            'C' => 14, // Payment type
+            'C' => 18, // Bank name
             'D' => 15, // Total hours
             'E' => 12, // Lessons count
             'F' => 10, // Currency
