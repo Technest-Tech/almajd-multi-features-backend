@@ -13,7 +13,7 @@ class LessonService
     public function __construct(
         private BillingService $billingService
     ) {}
-    public function getAll(array $filters = []): LengthAwarePaginator
+    public function getAll(array $filters = []): LengthAwarePaginator|Collection
     {
         $query = Lesson::with(['course.student', 'course.teacher', 'createdBy']);
 
@@ -42,9 +42,16 @@ class LessonService
             $query->where('status', $filters['status']);
         }
 
+        $perPage = (int)($filters['per_page'] ?? 15);
+        if ($perPage === 0) {
+            return $query->orderBy('date', 'desc')
+                ->orderBy('created_at', 'desc')
+                ->get();
+        }
+
         return $query->orderBy('date', 'desc')
             ->orderBy('created_at', 'desc')
-            ->paginate($filters['per_page'] ?? 15);
+            ->paginate($perPage);
     }
 
     public function getById(int $id): ?Lesson

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCourseRequest;
 use App\Models\Course;
 use App\Services\CourseService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -19,13 +20,19 @@ class CourseController extends Controller
     public function index(Request $request): JsonResponse
     {
         $filters = $request->only(['student_id', 'teacher_id', 'search', 'per_page']);
-        
-        // If logged-in user is a teacher, automatically filter by their ID
+
+        // If logged-in user is a teacher, filter by their ID and disable pagination
         if ($request->user() && $request->user()->isTeacher()) {
             $filters['teacher_id'] = $request->user()->id;
+            $filters['per_page'] = 0; // Return all courses without pagination for teachers
         }
-        
+
         $courses = $this->courseService->getAll($filters);
+
+        // When no pagination (Collection), wrap in {data: [...]} to match paginated format
+        if ($courses instanceof Collection) {
+            return response()->json(['data' => $courses]);
+        }
 
         return response()->json($courses);
     }

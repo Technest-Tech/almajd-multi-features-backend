@@ -6,6 +6,7 @@ use App\Models\Course;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection as BaseCollection;
 
 class CourseService
 {
@@ -18,7 +19,7 @@ class CourseService
         return [$now->copy()->startOfMonth()->format('Y-m-d'), $now->copy()->endOfMonth()->format('Y-m-d')];
     }
 
-    public function getAll(array $filters = []): LengthAwarePaginator
+    public function getAll(array $filters = []): LengthAwarePaginator|Collection
     {
         [$start, $end] = $this->currentMonthRange();
         $query = Course::with(['student', 'teacher'])
@@ -39,8 +40,13 @@ class CourseService
             $query->where('name', 'like', "%{$filters['search']}%");
         }
 
+        $perPage = (int)($filters['per_page'] ?? 15);
+        if ($perPage === 0) {
+            return $query->orderBy('created_at', 'desc')->get();
+        }
+
         return $query->orderBy('created_at', 'desc')
-            ->paginate($filters['per_page'] ?? 15);
+            ->paginate($perPage);
     }
 
     public function getById(int $id): ?Course
