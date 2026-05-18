@@ -40,13 +40,5 @@ class Course extends Model
     {
         return $this->hasMany(Lesson::class);
     }
-
-    /**
-     * Get the lessons count
-     */
-    public function getLessonsCountAttribute(): int
-    {
-        return $this->lessons()->count();
-    }
 }
 
