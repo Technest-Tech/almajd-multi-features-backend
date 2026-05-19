@@ -25,7 +25,12 @@ class LessonController extends Controller
         // If logged-in user is a teacher, filter by their courses and disable pagination
         if ($request->user() && $request->user()->isTeacher()) {
             $filters['teacher_id'] = $request->user()->id;
-            $filters['per_page'] = 0; // Return all lessons without pagination for teachers
+            $filters['per_page'] = 0;
+        }
+
+        // If admin is viewing a specific course's lessons, also disable pagination
+        if ($request->user() && $request->user()->isAdmin() && isset($filters['course_id'])) {
+            $filters['per_page'] = 0;
         }
 
         $lessons = $this->lessonService->getAll($filters);
