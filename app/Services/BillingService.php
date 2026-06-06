@@ -168,6 +168,23 @@ class BillingService
         return true;
     }
 
+    public function markAsUnpaid(int $billingId, string $type): bool
+    {
+        if ($type === 'auto') {
+            $billing = AutoBilling::findOrFail($billingId);
+        } else {
+            $billing = ManualBilling::findOrFail($billingId);
+        }
+
+        $billing->update([
+            'is_paid' => false,
+            'paid_at' => null,
+            'payment_method' => null,
+        ]);
+
+        return true;
+    }
+
     /**
      * Generate payment link for billing
      */

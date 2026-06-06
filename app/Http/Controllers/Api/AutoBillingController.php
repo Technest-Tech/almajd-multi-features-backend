@@ -103,6 +103,20 @@ class AutoBillingController extends Controller
         }
     }
 
+    public function markAsUnpaid(Request $request, string $id): JsonResponse
+    {
+        try {
+            $this->billingService->markAsUnpaid((int) $id, 'auto');
+
+            return response()->json([
+                'message' => 'Billing marked as unpaid successfully',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error marking billing as unpaid: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to mark billing as unpaid'], 500);
+        }
+    }
+
     /**
      * Send payment link via WhatsApp
      */

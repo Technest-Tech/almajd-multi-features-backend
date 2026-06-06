@@ -230,6 +230,7 @@ class PaymentService
                 'amount' => $amount,
                 'currency' => $currency,
                 'method' => 'card,paypal',
+                'hook_url' => url('/api/handle-anubpay-payment'),
                 'description' => "Payment for {$month} billing",
                 // Include data directly for fallback
                 'billing_id' => $billingId,

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AutoBilling;
+use App\Models\BillingPayment;
 use App\Models\ManualBilling;
 use App\Models\PaymentLog;
 use App\Models\PaymentSettings;
@@ -648,6 +649,11 @@ class PaymentController extends Controller
             }
             
             if ($markedAsPaid) {
+                // Update billing_payments transaction status to completed
+                $pid = $data['pid'] ?? null;
+                if ($pid) {
+                    BillingPayment::where('transaction_id', $pid)->update(['status' => 'paid']);
+                }
                 Log::info('AnubPay webhook: Successfully marked billing as paid', [
                     'billing_found' => $billingFound,
                     'billing_id' => $billingId,

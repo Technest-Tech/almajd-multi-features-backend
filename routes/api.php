@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AutoBillingController;
 use App\Http\Controllers\Api\ClientCredentialsController;
 use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\EvaluationReportController;
 use App\Http\Controllers\Api\LessonController;
 use App\Http\Controllers\Api\ManualBillingController;
 use App\Http\Controllers\Api\ReportController;
@@ -85,6 +86,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/reports/multi-student', [ReportController::class, 'generateMultiStudentReport']);
     Route::post('/reports/academy-statistics', [ReportController::class, 'generateAcademyStatisticsReport']);
 
+    // Evaluation Reports routes (تقارير الطلاب)
+    // Support (certificate account) creates reports; admin reviews and approves them.
+    Route::post('/evaluation-reports', [EvaluationReportController::class, 'store'])
+        ->middleware('restrict.user.type:certificate_viewer');
+    Route::middleware('restrict.user.type:admin')->group(function () {
+        Route::get('/evaluation-reports', [EvaluationReportController::class, 'index']);
+        Route::get('/evaluation-reports/{id}', [EvaluationReportController::class, 'show']);
+        Route::post('/evaluation-reports/{id}/check', [EvaluationReportController::class, 'markChecked']);
+        Route::delete('/evaluation-reports/{id}', [EvaluationReportController::class, 'destroy']);
+    });
+
     // Salaries routes
     Route::get('/salaries', [SalaryController::class, 'index']);
     Route::get('/salaries/export', [SalaryController::class, 'export']);
@@ -106,6 +118,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Parameterized routes come after specific routes
     Route::get('/auto-billings/{id}', [AutoBillingController::class, 'show']);
     Route::post('/auto-billings/{id}/mark-paid', [AutoBillingController::class, 'markAsPaid']);
+    Route::post('/auto-billings/{id}/mark-unpaid', [AutoBillingController::class, 'markAsUnpaid']);
     Route::post('/auto-billings/{id}/send-whatsapp', [AutoBillingController::class, 'sendWhatsApp']);
 
     // Manual Billings routes
