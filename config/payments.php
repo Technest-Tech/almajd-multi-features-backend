@@ -7,11 +7,12 @@ return [
         'enabled' => env('PAYPAL_ENABLED', true),
     ],
     'xpay' => [
-        'api_key' => env('XPAY_API_KEY', 'ZJJclz0v.vfD6HvBp3ShcysOEI8feWDZcy8x6QO91'),
-        'community_id' => env('XPAY_COMMUNITY_ID', 'G3dX238'),
-        'variable_amount_id' => env('XPAY_VARIABLE_AMOUNT_ID', '135'),
-        'api_url' => env('XPAY_API_URL', 'https://community.xpay.app/api/v1/payments/pay/variable-amount'),
-        'transaction_url' => env('XPAY_TRANSACTION_URL', 'https://community.xpay.app/api/communities/G3dX238/transactions'),
+        // New XPay API (api.xpay.app) - Checkout Sessions.
+        // Secrets must come from env only - never hardcode keys here.
+        'secret_key' => env('XPAY_SECRET_KEY'),          // sk_test_... / sk_live_...
+        'publishable_key' => env('XPAY_PUBLISHABLE_KEY'), // pk_test_... / pk_live_... (only needed for embedded/Elements)
+        'webhook_secret' => env('XPAY_WEBHOOK_SECRET'),  // whsec_... (per webhook endpoint)
+        'base_url' => env('XPAY_BASE_URL', 'https://api.xpay.app'),
     ],
     'anubpay' => [
         'token' => env('ANUBPAY_TOKEN', 'GkqJ5bOqVYoeWDqsjCcC9YedffkzCSZpJaplyY6x'),

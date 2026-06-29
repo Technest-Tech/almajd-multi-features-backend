@@ -15,6 +15,8 @@ class BillingPayment extends Model
         'billing_type',
         'payment_method',
         'transaction_id',
+        'xpay_session_id',
+        'xpay_payment_intent_id',
         'amount',
         'currency',
         'status',
