@@ -12,7 +12,6 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        'payment/xpay/webhook',
         'payment/xpay/callback',
         'api/handle-anubpay-payment',
     ];

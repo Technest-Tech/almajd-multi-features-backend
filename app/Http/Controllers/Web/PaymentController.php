@@ -8,7 +8,6 @@ use App\Models\BillingPayment;
 use App\Models\ManualBilling;
 use App\Models\PaymentLog;
 use App\Models\PaymentSettings;
-use App\Models\ProcessedWebhookEvent;
 use App\Models\User;
 use App\Services\PaymentService;
 use App\Services\ReportService;
@@ -185,10 +184,7 @@ class PaymentController extends Controller
     }
 
     /**
-     * Process XPay payment - creates a Checkout Session on the new XPay API
-     * (api.xpay.app) and redirects the customer to the hosted checkout page.
-     * Payment confirmation happens asynchronously via the signed webhook
-     * (see xpayWebhook); the return page is UX-only.
+     * Process XPay payment
      */
     public function xpayProcess(Request $request, string $token)
     {
@@ -207,7 +203,7 @@ class PaymentController extends Controller
 
         $billing = $autoBilling ?? $manualBilling;
         $billingType = $request->input('billing_type', $autoBilling ? 'auto' : 'manual');
-
+        
         if ($billingType === 'auto') {
             $user = $autoBilling->student;
         } else {
@@ -223,123 +219,73 @@ class PaymentController extends Controller
         $amount = $billingType === 'auto' ? $autoBilling->total_amount : $manualBilling->amount;
         $currency = $billing->currency->value ?? $billing->currency;
         $month = $billingType === 'auto' ? $autoBilling->month : 'custom';
-        $year = $billingType === 'auto' ? $autoBilling->year : null;
 
-        // {CHECKOUT_SESSION_ID} is substituted server-side by XPay.
-        $returnUrl = route('payment.xpay.return', ['token' => $token]) . '?session_id={CHECKOUT_SESSION_ID}';
+        // Use the billing's original currency and amount without conversion
+        $xpayAmount = $amount;
+        $xpayCurrency = $currency;
 
-        $result = $this->paymentService->createXPayCheckoutSession([
-            'amount' => $amount,
-            'currency' => $currency,
-            'product_name' => 'Almajd Academy - ' . ($billingType === 'auto' ? "{$month}/{$year}" : 'Payment'),
-            'customer' => [
-                'name' => $request->input('name'),
-                'email' => $request->input('email'),
-                'phone' => $user->whatsapp_number ?? $request->input('phone'),
+        $client = new \GuzzleHttp\Client();
+        $url = config('payments.xpay.api_url');
+
+        $data = [
+            "billing_data" => [
+                "name" => $request->input('name'),
+                "email" => $request->input('email'),
+                "phone_number" => $user->whatsapp_number ?? $request->input('phone'),
             ],
-            'metadata' => [
-                'billing_id' => (string) $billing->id,
-                'billing_type' => $billingType,
-                'user_id' => (string) $user->id,
-                'month' => (string) $month,
-                'year' => (string) ($year ?? ''),
-                'payment_token' => $token,
+            "custom_fields" => [
+                [
+                    "field_label" => "user_id",
+                    "field_value" => $user->id
+                ],
+                [
+                    "field_label" => "month",
+                    "field_value" => $billingType === 'auto' ? $month : 15
+                ],
             ],
-            'return_url' => $returnUrl,
-            'cancel_url' => route('payment.cancel'),
-        ]);
+            "amount" => $xpayAmount,
+            "currency" => $xpayCurrency,
+            "variable_amount_id" => config('payments.xpay.variable_amount_id'),
+            "community_id" => config('payments.xpay.community_id'),
+            "pay_using" => "card"
+        ];
 
-        if (!empty($result['success']) && !empty($result['url'])) {
-            return redirect()->away($result['url']);
+        if ($billingType === 'manual') {
+            $data["custom_fields"][] = [
+                "field_label" => "billing_id",
+                "field_value" => $manualBilling->id
+            ];
+        } else {
+            // Add year for auto billings
+            $data["custom_fields"][] = [
+                "field_label" => "year",
+                "field_value" => $autoBilling->year
+            ];
         }
 
-        Log::warning('XPay: redirecting to cancel, session not created', [
-            'token' => $token,
-            'error' => $result['error'] ?? null,
-        ]);
-        return redirect()->route('payment.cancel');
-    }
-
-    /**
-     * XPay webhook endpoint (new API). Source of truth for payment success.
-     * Verifies the XPay-Signature header, dedups on event.id, and fulfills
-     * the order on checkout.session.completed.
-     */
-    public function xpayWebhook(Request $request)
-    {
-        $rawBody = $request->getContent(); // raw bytes - required for signature verification
-        $signature = $request->header('XPay-Signature');
-
-        if (!$this->paymentService->verifyXPaySignature($rawBody, $signature)) {
-            Log::warning('XPay webhook: invalid signature');
-            return response('invalid signature', 400);
-        }
-
-        $event = json_decode($rawBody, true);
-        if (!is_array($event) || empty($event['id'])) {
-            return response('invalid payload', 400);
-        }
-
-        // Idempotency: skip events we've already processed (XPay retries deliveries).
-        if (ProcessedWebhookEvent::where('event_id', $event['id'])->exists()) {
-            return response('', 200);
-        }
+        $headers = [
+            'x-api-key' => config('payments.xpay.api_key'),
+            'Content-Type' => 'application/json',
+        ];
 
         try {
-            $type = $event['type'] ?? null;
-            $object = $event['data']['object'] ?? [];
+            $response = $client->request('POST', $url, [
+                'headers' => $headers,
+                'body' => json_encode($data),
+            ]);
 
-            if ($type === 'checkout.session.completed' && ($object['status'] ?? null) === 'complete') {
-                $this->paymentService->processXPaySessionCompleted($object);
+            $statusCode = $response->getStatusCode();
+            $body = json_decode($response->getBody()->getContents(), true);
+
+            if ($statusCode == 200 && isset($body['data']['iframe_url'])) {
+                return redirect($body['data']['iframe_url']);
             }
 
-            ProcessedWebhookEvent::create([
-                'event_id' => $event['id'],
-                'event_type' => $type,
-            ]);
+            return redirect()->route('payment.cancel');
         } catch (\Exception $e) {
-            Log::error('XPay webhook handling error', [
-                'error' => $e->getMessage(),
-                'event_id' => $event['id'] ?? null,
-            ]);
-            // Non-2xx so XPay retries on the standard schedule.
-            return response('error', 500);
+            Log::error('XPay process error: ' . $e->getMessage());
+            return redirect()->route('payment.cancel');
         }
-
-        return response('', 200);
-    }
-
-    /**
-     * XPay return page (after hosted checkout). UX-only: the webhook is the
-     * source of truth, but we optionally confirm via the API so the customer
-     * sees an accurate state even if the webhook is delayed.
-     */
-    public function xpayReturn(Request $request, string $token)
-    {
-        $autoBilling = AutoBilling::where('payment_token', $token)->first();
-        $manualBilling = ManualBilling::where('payment_token', $token)->first();
-
-        if (!$autoBilling && !$manualBilling) {
-            abort(404);
-        }
-
-        $billing = $autoBilling ?? $manualBilling;
-
-        $sessionId = $request->query('session_id');
-        if ($sessionId && !$billing->is_paid) {
-            $session = $this->paymentService->retrieveXPaySession($sessionId);
-            if ($session && ($session['status'] ?? null) === 'complete') {
-                $this->paymentService->processXPaySessionCompleted($session);
-                $billing->refresh();
-            }
-        }
-
-        if ($billing->is_paid) {
-            return view('payments.success', compact('billing'));
-        }
-
-        // Payment not yet confirmed (webhook may still be in flight).
-        return view('payments.cancel');
     }
 
     /**
