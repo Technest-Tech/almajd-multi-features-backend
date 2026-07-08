@@ -229,19 +229,25 @@ class ManualBillingController extends Controller
             }
             $message .= "Payment link: {$paymentLink}";
 
+            // Only students that actually have a WhatsApp number will receive a message.
+            $recipients = $students->filter(fn ($student) => !empty($student->whatsapp_number))->values();
+
             $results = [];
-            foreach ($students as $student) {
-                if ($student->whatsapp_number) {
-                    $result = $this->whatsAppService->sendMessage(
-                        $student->whatsapp_number,
-                        $message
-                    );
-                    $results[] = [
-                        'student_id' => $student->id,
-                        'student_name' => $student->name,
-                        'success' => $result['success'],
-                        'message' => $result['message'] ?? null,
-                    ];
+            foreach ($recipients as $index => $student) {
+                $result = $this->whatsAppService->sendMessage(
+                    $student->whatsapp_number,
+                    $message
+                );
+                $results[] = [
+                    'student_id' => $student->id,
+                    'student_name' => $student->name,
+                    'success' => $result['success'],
+                    'message' => $result['message'] ?? null,
+                ];
+
+                // 10 seconds between each message to avoid the WhatsApp number getting blocked
+                if ($index < $recipients->count() - 1) {
+                    sleep(10);
                 }
             }
 
