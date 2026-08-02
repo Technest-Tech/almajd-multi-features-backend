@@ -235,6 +235,10 @@ class PaymentService
                         'url' => $params['return_url'],
                     ],
                 ],
+                // Session currency MUST match the line-item price currency, otherwise
+                // XPay defaults the session to the account currency (EGP) and rejects
+                // the request for non-EGP billings (USD/GBP/etc.).
+                'currency' => $params['currency'],
                 'lineItems' => [[
                     'priceData' => [
                         'currency' => $params['currency'],
