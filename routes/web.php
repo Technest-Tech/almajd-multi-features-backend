@@ -62,8 +62,12 @@ Route::get('payment/cancel', [PaymentController::class, 'cancel'])->name('paymen
 // XPay routes - must come before payment/{token} to avoid route conflicts
 Route::get('payment/{token}/xpay/form', [PaymentController::class, 'xpayForm'])->name('payment.xpay.form');
 Route::post('payment/{token}/xpay/process', [PaymentController::class, 'xpayProcess'])->name('payment.xpay.process');
-// XPay callback - accepts both GET and POST (XPay sends GET with query parameters)
-// Must be before payment/{token} route to ensure proper matching
+// XPay return page (new API) - customer lands here after hosted checkout (UX only)
+Route::get('payment/{token}/xpay/return', [PaymentController::class, 'xpayReturn'])->name('payment.xpay.return');
+// XPay webhook (new API) - signature-verified, source of truth for payment success
+Route::post('payment/xpay/webhook', [PaymentController::class, 'xpayWebhook'])->name('payment.xpay.webhook');
+// XPay callback (legacy community.xpay.app API) - kept for in-flight transactions during cutover
+// Accepts both GET and POST (legacy XPay sent GET with query parameters)
 Route::match(['get', 'post'], 'payment/xpay/callback', [PaymentController::class, 'xpayCallback'])->name('payment.xpay.callback');
 
 // Parameterized payment routes (must come after specific routes)
